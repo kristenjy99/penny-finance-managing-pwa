@@ -1,4 +1,4 @@
-// Penny v0.5.0 – các màn Thống kê, Ví, Ngân sách, Công nợ (mobile + PC)
+// Penny v0.5.1 – các màn Thống kê, Ví, Ngân sách, Công nợ (mobile + PC)
 import * as U from './util.js';
 import { esc, num, MINUS } from './util.js';
 import * as st from './store.js';
@@ -6,7 +6,7 @@ import { S, L, NHAN, NO_TYPES } from './store.js';
 import { piggySvg } from './ui.js';
 
 // Trạng thái riêng của các màn này
-export const SV = { stTab: 'chi', person: '' };
+export const SV = { stTab: 'chi', person: '', per: 'thang', anchor: '', open: '' };
 
 // ---------- Định dạng ----------
 const plus = (n) => (n ? '+' : '') + num(n);
@@ -32,22 +32,68 @@ export function pctRound(vals) {
 
 // ================= THỐNG KÊ =================
 const MAU = 6; // số màu donut (--c1..--c6)
+const PER = [['tuan', 'Tuần'], ['thang', 'Tháng'], ['quy', 'Quý'], ['nam', 'Năm']];
+const p2 = (n) => String(n).padStart(2, '0');
 
-/** Gom theo nhóm danh mục (chi) hoặc theo danh mục (thu); tối đa 6 phần, phần thừa gộp vào "Khác" */
-export function statParts(loai, k = S.month) {
-  const m = new Map();
-  st.inMonth(k).filter((t) => t.loai === loai).forEach((t) => {
-    const key = loai === L.CHI ? st.groupOf(t.danh_muc || st.DM_CHUA) : (t.danh_muc || st.DM_THU_KHAC);
-    m.set(key, (m.get(key) || 0) + t.so_tien);
+/** Khoảng thời gian đang xem ở Thống kê: {from, to, label}. Tháng dùng chung tháng của app (S.month). */
+export function perRange() {
+  const per = SV.per;
+  const a = per === 'thang' || !SV.anchor ? S.month + '-01' : SV.anchor;
+  const [y, m] = a.split('-').map(Number);
+  if (per === 'tuan') { const from = U.weekStartOf(a, st.weekStart()); const to = U.addDays(from, 6); return { from, to, label: U.dm(from) + ' – ' + U.dmy(to) }; }
+  if (per === 'quy') {
+    const q = Math.floor((m - 1) / 3), k1 = y + '-' + p2(q * 3 + 1), k3 = y + '-' + p2(q * 3 + 3);
+    return { from: k1 + '-01', to: k3 + '-' + p2(U.daysIn(k3)), label: 'Quý ' + (q + 1) + '/' + y };
+  }
+  if (per === 'nam') return { from: y + '-01-01', to: y + '-12-31', label: 'Năm ' + y };
+  const k = S.month;
+  return { from: k + '-01', to: k + '-' + p2(U.daysIn(k)), label: 'Tháng ' + (+k.slice(5)) + '/' + k.slice(0, 4) };
+}
+// Đổi loại khoảng: giữ mốc đang xem (hôm nay nếu nằm trong khoảng hiện tại)
+export function perSet(per) {
+  const r = perRange(), td = U.today();
+  SV.anchor = td >= r.from && td <= r.to ? td : r.from;
+  SV.per = per;
+  if (per === 'thang') S.month = U.ym(SV.anchor);
+}
+export function perShift(d) {
+  const r = perRange();
+  if (SV.per === 'thang') { S.month = U.addMonths(S.month, d); return; }
+  if (SV.per === 'tuan') SV.anchor = U.addDays(r.from, 7 * d);
+  else if (SV.per === 'quy') SV.anchor = U.addMonths(U.ym(r.from), 3 * d) + '-01';
+  else SV.anchor = (+r.from.slice(0, 4) + d) + '-01-01';
+}
+const inRange = (r) => st.live().filter((t) => t.ngay >= r.from && t.ngay <= r.to);
+
+/**
+ * Gom theo nhóm danh mục; mỗi nhóm có chi tiết từng danh mục. Nếu chỉ có 1 nhóm (thường gặp với thu nhập)
+ * thì chia theo danh mục. Tối đa 6 phần, phần thừa gộp vào "Khác".
+ */
+export function statParts(loai, list) {
+  const lo = loai === L.THU ? L.THU : L.CHI;
+  const gm = new Map();
+  list.filter((t) => t.loai === lo).forEach((t) => {
+    const dm = t.danh_muc || st.fallbackCat(lo);
+    const g = st.groupOf(dm);
+    const x = gm.get(g) || { k: g, v: 0, n: 0, cats: new Map() };
+    x.v += t.so_tien; x.n++;
+    const c = x.cats.get(dm) || { k: dm, v: 0, n: 0, sym: st.symbolOf(t) };
+    c.v += t.so_tien; c.n++; x.cats.set(dm, c);
+    gm.set(g, x);
   });
-  let arr = [...m.entries()].map(([k2, v]) => ({ k: k2, v })).sort((a, b) => b.v - a.v);
+  let arr = [...gm.values()].map((x) => ({ ...x, cats: [...x.cats.values()].sort((a, b) => b.v - a.v) }));
+  let byCat = false;
+  if (arr.length === 1 && arr[0].cats.length > 1) { byCat = true; arr = arr[0].cats.map((c) => ({ k: c.k, v: c.v, n: c.n, cats: [] })); }
+  arr.sort((a, b) => b.v - a.v);
   if (arr.length > MAU) {
     const giu = arr.slice(0, MAU - 1).filter((x) => U.boDau(x.k) !== 'khac');
     const con = arr.filter((x) => !giu.includes(x));
-    arr = giu.concat({ k: 'Khác', v: U.sum(con, (x) => x.v) });
+    arr = giu.concat({ k: 'Khác', v: U.sum(con, (x) => x.v), n: U.sum(con, (x) => x.n), cats: con.flatMap((x) => (x.cats.length ? x.cats : [{ k: x.k, v: x.v, n: x.n }])).sort((a, b) => b.v - a.v) });
   }
   const pct = pctRound(arr.map((x) => x.v));
-  return arr.map((x, i) => ({ ...x, pct: pct[i], mau: 'var(--c' + (i + 1) + ')' }));
+  const out = arr.map((x, i) => ({ ...x, pct: pct[i], mau: 'var(--c' + (i + 1) + ')' }));
+  out.byCat = byCat;
+  return out;
 }
 
 // Một cung của vòng tròn (từ góc a đến b, tính bằng phần của vòng, 0 = 12 giờ, theo chiều kim đồng hồ)
@@ -77,35 +123,56 @@ export function donutSvg(parts, label, total) {
     <div class="dc"><span>${esc(label)}</span><b class="num ${fs}">${t}</b></div></div>`;
 }
 
-/** Biểu đồ cột theo ngày (SVG, chiều ngang co giãn theo khung) */
-export function dayBarsSvg(loai, k = S.month) {
+// Các cột của biểu đồ theo khoảng: tuần/tháng -> từng ngày, quý -> từng tuần, năm -> từng tháng (không vẽ tương lai)
+export function buckets(loai, r) {
   const td = U.today();
-  const nDays = U.ym(td) === k ? +td.slice(8) : k < U.ym(td) ? U.daysIn(k) : 0;
-  const per = new Array(nDays).fill(0);
-  st.inMonth(k).filter((t) => t.loai === loai).forEach((t) => { const d = +t.ngay.slice(8) - 1; if (d >= 0 && d < nDays) per[d] += t.so_tien; });
-  if (!nDays) return '<div class="empty">Tháng này chưa bắt đầu.</div>';
-  const max = Math.max(...per, 1);
-  const H = 200, TOP = 26, n = nDays;
+  const end = r.to < td ? r.to : td;
+  if (end < r.from) return [];
+  const list = st.live().filter((t) => t.loai === loai && t.ngay >= r.from && t.ngay <= end);
+  const tong = (a, b) => U.sum(list.filter((t) => t.ngay >= a && t.ngay <= b), (t) => t.so_tien);
+  const out = [];
+  if (SV.per === 'tuan' || SV.per === 'thang') {
+    for (let d = r.from; d <= end; d = U.addDays(d, 1)) out.push({ lb: U.dm(d), v: tong(d, d), t: U.dmy(d) });
+  } else if (SV.per === 'quy') {
+    for (let d = U.weekStartOf(r.from, st.weekStart()); d <= end; d = U.addDays(d, 7)) {
+      const a = d < r.from ? r.from : d, b0 = U.addDays(d, 6), b = b0 > r.to ? r.to : b0;
+      out.push({ lb: U.dm(a), v: tong(a, b), t: U.dm(a) + ' – ' + U.dm(b) });
+    }
+  } else {
+    const y = r.from.slice(0, 4);
+    for (let m = 1; m <= 12; m++) {
+      const k = y + '-' + p2(m);
+      if (k + '-01' > end) break;
+      out.push({ lb: 'T' + m, v: tong(k + '-01', k + '-' + p2(U.daysIn(k))), t: 'Tháng ' + m + '/' + y });
+    }
+  }
+  return out;
+}
+
+/** Biểu đồ cột SVG (chiều ngang co giãn theo khung) */
+export function barsSvg(bk, nhan) {
+  if (!bk.length) return '<div class="empty">Khoảng thời gian này chưa tới.</div>';
+  const max = Math.max(...bk.map((x) => x.v), 1);
+  const H = 200, TOP = 26, n = bk.length;
   const w = 100 / n;
   const nhieu = n > 12;
-  const iMax = per.indexOf(Math.max(...per));
+  const iMax = bk.map((x) => x.v).indexOf(Math.max(...bk.map((x) => x.v)));
   const buoc = Math.ceil(n / 10);
-  let h = '';
-  per.forEach((v, i) => {
+  const h = bk.map((x, i) => {
+    const v = x.v;
     const bh = v ? Math.max(2, Math.round(v / max * H)) : 0;
     const y = TOP + H - bh;
-    const ngay = String(i + 1).padStart(2, '0') + '/' + k.slice(5);
-    const nhan = v && (!nhieu || i === iMax) ? `<text x="50%" y="${y - 8}" text-anchor="middle" class="bv">${num(Math.round(v / 1000))}</text>` : '';
-    const xl = !nhieu || i % buoc === 0 || i === n - 1 ? `<text x="50%" y="${TOP + H + 22}" text-anchor="middle" class="bx">${ngay}</text>` : '';
-    h += `<svg x="${(i * w).toFixed(4)}%" width="${w.toFixed(4)}%" height="${TOP + H + 34}" overflow="visible">
-      <title>${ngay}: ${num(v)} đ</title>
-      ${bh ? `<rect x="${nhieu ? 20 : 30}%" width="${nhieu ? 60 : 40}%" y="${y}" height="${bh}" fill="var(--acc)"/>` : ''}${nhan}${xl}</svg>`;
-  });
-  return `<svg class="dbars" width="100%" height="${TOP + H + 34}" role="img" aria-label="${loai === L.CHI ? 'Chi' : 'Thu'} theo ngày">${h}
+    const lbv = v && (!nhieu || i === iMax) ? `<text x="50%" y="${y - 8}" text-anchor="middle" class="bv">${num(Math.round(v / 1000))}</text>` : '';
+    const xl = !nhieu || i % buoc === 0 || i === n - 1 ? `<text x="50%" y="${TOP + H + 22}" text-anchor="middle" class="bx">${x.lb}</text>` : '';
+    return `<svg x="${(i * w).toFixed(4)}%" width="${w.toFixed(4)}%" height="${TOP + H + 34}" overflow="visible">
+      <title>${x.t}: ${num(v)} đ</title>
+      ${bh ? `<rect x="${nhieu ? 20 : 30}%" width="${nhieu ? 60 : 40}%" y="${y}" height="${bh}" fill="var(--acc)"/>` : ''}${lbv}${xl}</svg>`;
+  }).join('');
+  return `<svg class="dbars" width="100%" height="${TOP + H + 34}" role="img" aria-label="${esc(nhan)}">${h}
     <line x1="0" x2="100%" y1="${TOP + H + 33.5}" y2="${TOP + H + 33.5}" stroke="var(--bd)"/></svg>`;
 }
 
-// Cảnh báo ngân sách: nhóm từ 80% trở lên
+// Cảnh báo ngân sách (chỉ khi xem theo tháng): nhóm từ 80% trở lên
 function budgetAlert() {
   const b = st.budgets(S.month).filter((x) => x.ratio >= 0.8).sort((a, c) => c.ratio - a.ratio);
   if (!b.length) return '';
@@ -119,22 +186,59 @@ function budgetAlert() {
     <div class="bar ${st.level(x.ratio)}" role="progressbar" aria-valuenow="${pct(x)}" aria-label="${esc(x.nhom)}"><i style="width:${Math.min(100, pct(x))}%"></i></div></div>`).join('');
 }
 
+// Hàng chọn khoảng: Tuần | Tháng | Quý | Năm  và  ‹ nhãn ›
+export const perBar = () => `<div class="perbar"><div class="seg" role="radiogroup" aria-label="Khoảng thời gian">${PER.map(([k, t]) => `<button role="radio" class="${SV.per === k ? 'on' : ''}" aria-checked="${SV.per === k}" data-act="st-per" data-v="${k}">${t}</button>`).join('')}</div>
+  <div class="pnav"><button data-act="st-prev" aria-label="Khoảng trước">‹</button><b>${perRange().label}</b><button data-act="st-next" aria-label="Khoảng sau">›</button></div></div>`;
+
 export function statsHtml(pc) {
   const loai = SV.stTab === 'thu' ? L.THU : L.CHI;
-  const parts = statParts(loai);
+  const r = perRange();
+  const list = inRange(r);
+  const parts = statParts(loai, list);
   const total = U.sum(parts, (x) => x.v);
   const nhan = loai === L.CHI ? 'Tổng chi' : 'Tổng thu';
-  const legend = parts.length ? parts.map((p) => `<div class="leg"><i style="background:${p.mau}"></i><span class="k">${esc(p.k)}</span><span class="num">${num(p.v)} · ${p.pct}%</span></div>`).join('')
-    : `<div class="empty">Chưa có khoản ${loai === L.CHI ? 'chi' : 'thu'} trong tháng này.</div>`;
-  const left = `<div class="donut-wrap">${donutSvg(parts, nhan, total)}</div>${legend}${loai === L.CHI ? budgetAlert() : ''}`;
-  if (!pc) return left;
+  const nGd = U.sum(parts, (x) => x.n);
+  const legend = parts.length ? parts.map((p) => {
+    const mo = !parts.byCat && p.cats.length && SV.open === p.k;
+    const sub = mo ? p.cats.map((c) => `<div class="leg-sub"><span class="k">${esc(c.k)}</span><span class="num">${num(c.v)} · ${total ? Math.round(c.v / total * 100) : 0}%<small>${c.n} GD · ${p.v ? Math.round(c.v / p.v * 100) : 0}% nhóm</small></span></div>`).join('') : '';
+    const canMo = !parts.byCat && p.cats.length;
+    return `<${canMo ? 'button' : 'div'} class="leg" ${canMo ? `data-act="st-grp" data-k="${esc(p.k)}" aria-expanded="${!!mo}"` : ''}><i style="background:${p.mau}"></i><span class="k">${esc(p.k)}</span><span class="num">${num(p.v)} · ${p.pct}%</span>${canMo ? `<span class="chev" aria-hidden="true">${mo ? '▾' : '▸'}</span>` : ''}</${canMo ? 'button' : 'div'}>${sub}`;
+  }).join('') : `<div class="empty">Chưa có khoản ${loai === L.CHI ? 'chi' : 'thu'} trong khoảng này.</div>`;
+  const head = parts.length ? `<div class="sec"><span>${loai === L.CHI ? 'Chi' : 'Thu'} theo ${parts.byCat ? 'danh mục' : 'nhóm'}</span><span class="r num">${num(total)} đ · ${nGd} GD</span></div>` : '';
+  const alert = loai === L.CHI && SV.per === 'thang' ? budgetAlert() : '';
+  const tenBars = (loai === L.CHI ? 'Chi' : 'Thu') + ' theo ' + (SV.per === 'quy' ? 'tuần' : SV.per === 'nam' ? 'tháng' : 'ngày');
+  const bars = barsSvg(buckets(loai, r), tenBars);
+  const left = `<div class="donut-wrap">${donutSvg(parts, nhan, total)}</div>${head}${legend}${alert}`;
+  const s0 = st.totals(list);
+  const band = bandOf([{ lb: 'Thu', vl: plus(s0.thu), c: 'inc' }, { lb: 'Chi', vl: minus(s0.chi), c: 'exp' }, { lb: 'Tổng', vl: net(s0.thu - s0.chi) }]);
+  if (!pc) return perBar() + band + left + `<div class="sec"><span>${tenBars} <small class="unit">nghìn đ</small></span></div><div class="mbars">${bars}</div>`;
   const tabs = `<div class="utabs st-tabs" role="tablist">${[['chi', 'Chi tiêu'], ['thu', 'Thu nhập']].map(([k, t]) => `<button role="tab" class="${SV.stTab === k ? 'on' : ''}" aria-selected="${SV.stTab === k}" data-act="st-tab" data-v="${k}">${t}</button>`).join('')}</div>`;
-  return monthBand(st.inMonth(S.month)) + `<div class="st-grid"><div class="st-l">${tabs}${left}</div>
-    <div class="st-r"><h2>${loai === L.CHI ? 'Chi' : 'Thu'} theo ngày <small>nghìn đ</small></h2>${dayBarsSvg(loai)}</div></div>`;
+  return band + perBar() + `<div class="st-grid"><div class="st-l">${tabs}${left}</div>
+    <div class="st-r"><h2>${tenBars} <small>nghìn đ</small></h2>${bars}</div></div>`;
 }
 export const statsTabs = () => `<div class="utabs" role="tablist">${[['chi', 'Chi tiêu'], ['thu', 'Thu nhập']].map(([k, t]) => `<button role="tab" class="${SV.stTab === k ? 'on' : ''}" aria-selected="${SV.stTab === k}" data-act="st-tab" data-v="${k}">${t}</button>`).join('')}</div>`;
 
 // ================= VÍ =================
+// Tình trạng kỳ sao kê thẻ -> {c, t} (lớp màu, câu mô tả)
+export function cardStatus(info) {
+  if (!info.ngaySk) return '';
+  if (info.quaHan) return { c: 'exp', t: `Quá hạn ${U.dm(info.hanTra)}: còn phải trả ${num(info.canTra)}` };
+  if (info.canTra > 0) return { c: info.conNgay != null && info.conNgay <= 3 ? 'exp' : '', t: `Cần trả ${num(info.canTra)}${info.hanTra ? ` trước ${U.dm(info.hanTra)} (còn ${info.conNgay} ngày)` : ''}${info.toiThieu ? ` · tối thiểu ${num(info.toiThieu)}` : ''}` };
+  return { c: 'inc', t: info.noSk ? `Đã trả đủ kỳ sao kê ${U.dm(info.ngaySk)}` : `Kỳ sao kê ${U.dm(info.ngaySk)} không có dư nợ` };
+}
+// Dòng phụ dưới mỗi thẻ: hạn mức, thanh đã dùng, kỳ sao kê, nút Thanh toán
+function cardLine(w, pc) {
+  const i = st.cardInfo(w);
+  const tt = cardStatus(i);
+  if (!i.lim && !tt && !i.no) return '';
+  const pct = Math.round(i.ratio * 100);
+  const l1 = i.lim ? `Dư nợ <b class="num">${num(i.no)}</b> · còn <b class="num ${i.con < 0 ? 'exp' : ''}">${i.con < 0 ? MINUS : ''}${num(i.con)}</b> / ${num(i.lim)} (${pct}%)` : `Dư nợ <b class="num">${num(i.no)}</b>`;
+  const bar = i.lim ? `<div class="bar ${st.level(i.ratio)}" role="progressbar" aria-valuenow="${pct}" aria-label="Đã dùng hạn mức ${esc(w.ten_vi)}"><i style="width:${Math.min(100, pct)}%"></i></div>` : '';
+  const pay = i.no ? `<button class="btn sm" data-act="card-pay" data-k="${esc(w.ten_vi)}">Thanh toán</button>` : '';
+  const body = `<div class="cl"><div class="cl1">${l1}</div>${bar}<div class="cl3"><div class="cl2 ${tt ? tt.c : ''}">${tt ? tt.t : ''}</div>${pay}</div></div>`;
+  return pc ? `<div class="tr sub">${body}</div>` : `<div class="cardline">${body}</div>`;
+}
+
 export function walletGroups() {
   const ws = st.wallets(S.month);
   const order = st.NHOM_VI.slice();
@@ -161,7 +265,7 @@ export function walletsHtml(pc) {
       + g.ws.map((w) => `<button class="row" data-act="w-edit" data-k="${esc(w.ten_vi)}">
         <span class="av" aria-hidden="true">${esc(U.chuCai(w.ten_vi))}</span>
         <span class="mid"><span class="t1" style="display:block">${esc(w.ten_vi)}${st.defaultAccount() === w.ten_vi ? ' <span class="tag">mặc định</span>' : ''}</span><span class="t2" style="display:block">Thu ${num(w.thu)} · Chi ${num(w.chi)}</span></span>
-        <span class="amt num ${balC(w.bal)}">${net(w.bal)}</span></button>`).join('')).join('');
+        <span class="amt num ${balC(w.bal)}">${net(w.bal)}</span></button>` + (w.nhom === st.NHOM_THE ? cardLine(w, false) : '')).join('')).join('');
     return bandOf([{ lb: 'Tổng thu', vl: plus(tt.thu), c: 'inc' }, { lb: 'Tổng chi', vl: minus(tt.chi), c: 'exp' }])
       + (list || '<div class="empty">Chưa có ví nào.</div>')
       + `<div class="btns pad"><button class="btn" data-act="transfer">Chuyển khoản</button><button class="btn pri" data-act="w-add">+ Thêm ví</button></div>` + netNote(nw);
@@ -169,7 +273,7 @@ export function walletsHtml(pc) {
   const all = gs.flatMap((g) => g.ws);
   const rows = all.map((w) => `<button class="tr" data-act="w-edit" data-k="${esc(w.ten_vi)}">
       <span class="b">${esc(w.ten_vi)}${st.defaultAccount() === w.ten_vi ? ' <span class="tag">mặc định</span>' : ''}</span><span>${esc(w.nhom || 'Khác')}</span>
-      <span class="r num">${num(w.thu)}</span><span class="r num">${num(w.chi)}</span><span class="r num b ${balC(w.bal)}">${net(w.bal)}</span></button>`).join('');
+      <span class="r num">${num(w.thu)}</span><span class="r num">${num(w.chi)}</span><span class="r num b ${balC(w.bal)}">${net(w.bal)}</span></button>` + (w.nhom === st.NHOM_THE ? cardLine(w, true) : '')).join('');
   return bandOf([{ lb: 'Tổng số dư', vl: net(nw.total) + ' đ', c: nw.total < 0 ? 'exp' : '' }, { lb: 'Tài sản', vl: num(nw.assets) }, { lb: 'Nợ', vl: minus(nw.liab), c: 'exp' },
     { lb: 'Tổng thu', vl: plus(tt.thu), c: 'inc' }, { lb: 'Tổng chi', vl: minus(tt.chi), c: 'exp' }])
     + `<div class="tbl wtbl"><div class="th"><span>Ví</span><span>Nhóm</span><span class="r">Thu</span><span class="r">Chi</span><span class="r">Số dư</span></div>${rows}

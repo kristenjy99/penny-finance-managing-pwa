@@ -1,6 +1,6 @@
 // Tiện ích chung: định dạng tiền, ngày, chữ không dấu
 
-export const VERSION = '0.5.0';
+export const VERSION = '0.5.1';
 
 // ---------- Chữ ----------
 export const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

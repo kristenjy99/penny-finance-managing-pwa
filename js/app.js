@@ -1,4 +1,4 @@
-// Penny PWA v0.5.0 – khung app, điều hướng, các màn hình
+// Penny PWA v0.5.1 – khung app, điều hướng, các màn hình
 import * as U from './util.js';
 import { esc, num, MINUS } from './util.js';
 import * as st from './store.js';
@@ -167,10 +167,22 @@ function calendar(pc) {
   }
   return `<div class="cal">${h}</div>`;
 }
+// Tiêu đề ngày ở Lịch: tổng thu và tổng chi riêng
+const calHead = (d, list) => { const s0 = st.totals(list); return `<div class="sec"><span>${U.dayLabel(d)}</span><span class="r num"><span class="inc">${plus(s0.thu)}</span> · <span class="exp">${minus(s0.chi)}</span></span></div>`; };
 function dayDetail() {
   const d = selDay();
   const list = st.live().filter((t) => t.ngay === d);
-  return dayHead(d, list) + (list.length ? sortDesc(list).map((t) => rowHtml(t)).join('') : '<div class="empty">Không có giao dịch trong ngày này.</div>');
+  return calHead(d, list) + (list.length ? sortDesc(list).map((t) => rowHtml(t)).join('') : '<div class="empty">Không có giao dịch trong ngày này.</div>');
+}
+// Mobile: bấm vào ngày có giao dịch -> mở chi tiết ngày (thu / chi / tổng + từng giao dịch)
+function openDay(d) {
+  const list = sortDesc(st.live().filter((t) => t.ngay === d));
+  const khac = list.filter((t) => t.loai !== L.THU && t.loai !== L.CHI).length;
+  openSheet({
+    title: U.dayLabel(d), cls: 'mid', raw: true,
+    body: band(list) + list.map((t) => rowHtml(t)).join('')
+      + `<div class="note" style="padding-top:12px">${list.length} giao dịch${khac ? ` · ${khac} chuyển khoản / công nợ không tính vào Thu, Chi` : ''}. Bấm vào giao dịch để sửa.</div>`
+  });
 }
 
 // ================= TUẦN / THÁNG / TỔNG KẾT =================
@@ -287,7 +299,7 @@ function renderTop() {
   else {
     title = TITLE[V.route];
     const tb = (act, t, cls = '') => `<button class="tbtn ${cls}" data-act="${act}">${t}</button>`;
-    if (V.route === 'thongke') { right = monthPill(S.month) + (pc ? addBtn : ''); if (!pc) tabs = SC.statsTabs(); }
+    if (V.route === 'thongke') { right = pc ? addBtn : piggy; if (!pc) tabs = SC.statsTabs(); }
     else if (V.route === 'vi') { right = monthPill(S.month) + (pc ? tb('transfer', 'Chuyển khoản', 'light') + tb('w-add', '+ Thêm ví') : ''); if (!pc) hero = SC.walletHero(); }
     else if (V.route === 'ngansach') right = monthPill(S.month) + (pc ? tb('b-add', '+ Thêm nhóm') : '');
     else if (V.route === 'congno') right = pc ? tb('p-add', '+ Thêm người') : piggy;
@@ -550,7 +562,9 @@ async function onAct(b, e) {
     case 'day': {
       const d = b.dataset.day;
       if (U.ym(d) !== S.month) setMonth(U.ym(d));
-      V.day = d; V.dayMonth = S.month; render(); break;
+      V.day = d; V.dayMonth = S.month; render();
+      if (!isPC() && st.live().some((t) => t.ngay === d)) openDay(d);
+      break;
     }
     case 'week': V.openWeek = V.openWeek === b.dataset.wk ? '' : b.dataset.wk; render(); break;
     case 'month': setMonth(b.dataset.m); go('#/gd'); break;
@@ -560,7 +574,7 @@ async function onAct(b, e) {
       break;
     }
     case 'fcat': {
-      const v = await pickOne({ title: 'Lọc theo danh mục', value: V.fCat, options: [{ v: '', label: 'Tất cả danh mục' }].concat(S.cat.map((c) => ({ v: c.danh_muc, label: (c.ky_hieu ? c.ky_hieu + '  ' : '') + c.danh_muc, group: c.nhom }))) });
+      const v = await pickOne({ title: 'Lọc theo danh mục', value: V.fCat, options: [{ v: '', label: 'Tất cả danh mục' }].concat(st.catsSorted().map((c) => ({ v: c.danh_muc, label: (c.ky_hieu ? c.ky_hieu + '  ' : '') + c.danh_muc, group: c.nhom }))) });
       if (v !== undefined) { V.fCat = v; render(); }
       break;
     }
@@ -595,7 +609,7 @@ function bind() {
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-act]');
     if (!b || b.tagName === 'INPUT') return;
-    if (b.closest('#layer') && !['conn'].includes(b.dataset.act)) return; // form trong popup tự xử lý
+    if (b.closest('#layer') && !['conn', 'edit'].includes(b.dataset.act)) return; // form trong popup tự xử lý
     e.preventDefault();
     onAct(b, e);
   });

@@ -2,7 +2,9 @@
 import { esc, parseMoney, num, today, okDate, dmy } from './util.js';
 import * as st from './store.js';
 import { S, L, NHAN, NO_TYPES } from './store.js';
-import { pickOne, confirmBox, toast, ICON } from './ui.js';
+import { confirmBox, toast, ICON } from './ui.js';
+import { pickCategory } from './pick.js';
+import { openWallet } from './manage.js';
 
 const LOAI_THUONG = [L.CHI, L.THU, L.CHUYEN];
 const NHAN_NUT = { 'chi': 'Chi', 'thu': 'Thu', 'chuyển': 'Chuyển', 'no': 'Công nợ', 'cho vay': 'Cho vay', 'đi vay': 'Đi vay', 'thu nợ': 'Thu nợ', 'trả nợ': 'Trả nợ' };
@@ -20,12 +22,12 @@ let seq = 0;
  * opts.tx: giao dịch cần sửa (bỏ trống = thêm mới)
  * opts.variant: 'panel' (PC, cột phải) | 'sheet' (popup) | 'page' (màn sửa mobile)
  * opts.onDone(tx|null): gọi sau khi lưu / xóa / hủy
- * opts.init: giá trị chọn sẵn khi thêm mới {loai, nguoi, so_tien, vi}
+ * opts.init: giá trị chọn sẵn khi thêm mới {loai, nguoi, so_tien, vi, vi_den, ghi_chu}
  */
 export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {}, init = null } = {}) {
   const id = 'f' + (++seq);
   const suaNo = !!(tx && NO_TYPES.includes(tx.loai));
-  const vis = st.walletNames();
+  let vis = st.walletNames();
   const viMacDinh = st.defaultAccount();
   const f = tx
     ? { loai: tx.loai, amt: num(tx.so_tien) + ' đ', note: tx.ghi_chu, cat: tx.danh_muc, vi: tx.vi || viMacDinh, vi_den: tx.vi_den, nguoi: tx.nguoi, ngay: tx.ngay || today() }
@@ -35,7 +37,10 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
     if (init.nguoi) f.nguoi = init.nguoi;
     if (init.so_tien) f.amt = num(init.so_tien) + ' đ';
     if (init.vi && vis.includes(init.vi)) f.vi = init.vi;
+    if (init.vi_den && vis.includes(init.vi_den)) f.vi_den = init.vi_den;
+    if (init.ghi_chu) f.note = init.ghi_chu;
   }
+  let nhoKw = false; // ghi nhớ từ khóa "ghi chú -> danh mục" khi lưu
   if (!f.vi_den) f.vi_den = vis.find((v) => v !== f.vi) || '';
   let err = '';
   let noCuoi = NO_TYPES.includes(f.loai) ? f.loai : L.CHO_VAY; // loại công nợ chọn gần nhất
@@ -45,7 +50,8 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
   const loais = suaNo ? NO_TYPES : tx ? LOAI_THUONG : LOAI_THUONG.concat('no');
   const tuDong = () => st.classify(f.note, f.loai) || st.fallbackCat(f.loai);
   const opts = (sel, list) => list.map((v) => `<option ${v === sel ? 'selected' : ''}>${esc(v)}</option>`).join('')
-    + (sel && !list.includes(sel) ? `<option selected>${esc(sel)}</option>` : '');
+    + (sel && !list.includes(sel) ? `<option selected>${esc(sel)}</option>` : '')
+    + '<option value="__new__">＋ Thêm ví mới…</option>';
 
   function catBtn() {
     const v = f.cat ? `<span class="v">${esc(f.cat)}</span>` : `<span class="v">${esc(tuDong())} <span class="auto">· tự động</span></span>`;
@@ -117,8 +123,16 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
     if (n === 'ngay') { const s = e.target.parentNode.querySelector('.dshow span'); if (s) s.textContent = f.ngay ? dmy(f.ngay) : 'Chọn ngày'; }
     if (n === 'amt' && err === 'amt') { err = ''; }
   });
-  el.addEventListener('change', (e) => {
+  el.addEventListener('change', async (e) => {
     if (!e.target.name) return;
+    // Chọn "＋ Thêm ví mới…" trong ô ví -> mở hộp thêm ví, xong chọn luôn ví mới
+    if ((e.target.name === 'vi' || e.target.name === 'vi_den') && e.target.value === '__new__') {
+      const ten = e.target.name;
+      e.target.value = f[ten] || '';
+      read();
+      openWallet('', (moi) => { vis = st.walletNames(); f[ten] = moi; draw(); });
+      return;
+    }
     f[e.target.name] = e.target.value;
     if (e.target.name === 'ngay') { const s = e.target.parentNode.querySelector('.dshow span'); if (s) s.textContent = f.ngay ? dmy(f.ngay) : 'Chọn ngày'; }
   });
@@ -149,11 +163,8 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
     }
     if (b.dataset.pick === 'cat') {
       read();
-      const tu = tuDong();
-      const options = [{ v: '', label: 'Tự động theo từ khóa', sub: 'Hiện tại: ' + tu }]
-        .concat(st.catsFor(f.loai).map((c) => ({ v: c.danh_muc, label: (c.ky_hieu ? c.ky_hieu + '  ' : '') + c.danh_muc, group: c.nhom || 'Khác' })));
-      const v = await pickOne({ title: 'Chọn danh mục', options, value: f.cat });
-      if (v !== undefined) { f.cat = v; refreshCat(); }
+      const r = await pickCategory({ loai: f.loai, note: f.note, value: f.cat });
+      if (r) { f.cat = r.v; nhoKw = r.nho; refreshCat(); }
       return;
     }
     if (b.hasAttribute('data-cancel')) { onDone(null); return; }
@@ -192,6 +203,10 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
       nguoi: isNo ? String(f.nguoi).trim() : '',
       nguon: tx ? tx.nguon : 'web'
     });
+    if (nhoKw && thuChi && f.cat && f.note.trim()) {
+      await st.saveKw({ tu_khoa: f.note.trim(), danh_muc: f.cat });
+      nhoKw = false;
+    }
     toast(tx ? 'Đã lưu thay đổi' : `Đã thêm ${NHAN[saved.loai].toLowerCase()} ${num(saved.so_tien)} đ`);
     if (!tx && variant === 'panel') {
       // Panel PC: giữ loại, ví, ngày để nhập tiếp

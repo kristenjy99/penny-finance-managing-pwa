@@ -4,28 +4,48 @@ import { esc, num } from './util.js';
 import * as st from './store.js';
 import { S, L } from './store.js';
 import { openSheet, confirmBox, toast, pickOne, ask } from './ui.js';
-import { SV, budStatus } from './screens.js';
+import { SV, budStatus, cardStatus, perSet, perShift } from './screens.js';
 import { openCsv } from './csv.js';
 
 const same = (a, b) => U.boDau(a) === U.boDau(b);
 const tagLoi = (b, msg) => { const m = b.querySelector('[data-msg]'); if (m) { m.className = 'okmsg no'; m.textContent = msg; } };
 
 // ================= VÍ =================
-export function openWallet(key = '') {
+export function openWallet(key = '', onSaved = null) {
   const w = key ? st.wallets(S.month).find((x) => x.ten_vi === key) : null;
   const laMacDinh = !!w && st.defaultAccount() === w.ten_vi;
   const nhoms = st.NHOM_VI.slice();
-  if (w && w.nhom && !nhoms.includes(w.nhom)) nhoms.push(w.nhom);
-  let nhom = w ? (w.nhom && w.nhom !== 'Khác' ? w.nhom : st.NHOM_VI[0]) : st.NHOM_VI[0];
+  if (w && w.nhom && !nhoms.includes(w.nhom) && w.nhom !== 'Khác') nhoms.push(w.nhom);
+  let nhom = w && w.nhom !== 'Khác' ? w.nhom : st.NHOM_VI[0];
+  const the = () => nhom === st.NHOM_THE;
+  const info = w && st.isCard(w) ? st.cardInfo(w) : null;
+  const tt = info ? cardStatus(info) : '';
+  const viKhac = st.walletNames().filter((x) => x !== (w && w.ten_vi) && !st.isCard(st.S.acc.find((a) => a.ten_vi === x) || {}));
+  const so = (v) => (v ? num(v) : '');
   openSheet({
-    title: w ? 'Sửa ví' : 'Thêm ví', cls: 'mid',
+    title: w ? (st.isCard(w) ? 'Thẻ tín dụng' : 'Sửa ví') : 'Thêm ví', cls: 'mid',
     body: `<form novalidate>
+      ${info ? `<div class="cardbox"><div class="cb1"><span>Dư nợ</span><b class="num exp">${num(info.no)}</b></div>
+        ${info.lim ? `<div class="cb1"><span>Hạn mức còn lại</span><b class="num ${info.con < 0 ? 'exp' : ''}">${info.con < 0 ? U.MINUS : ''}${num(info.con)}</b></div>
+        <div class="bar ${st.level(info.ratio)}" role="progressbar" aria-valuenow="${Math.round(info.ratio * 100)}" aria-label="Đã dùng hạn mức"><i style="width:${Math.min(100, Math.round(info.ratio * 100))}%"></i></div>
+        <div class="cb2">Đã dùng ${Math.round(info.ratio * 100)}% hạn mức ${num(info.lim)}</div>` : ''}
+        ${info.ngaySk ? `<div class="cb2">Kỳ sao kê ${U.dm(info.ngaySk)}: dư nợ ${num(info.noSk)}, đã trả ${num(info.daTra)} · chi kỳ này ${num(info.chiKy)} · sao kê tới ${U.dm(info.skSau)}</div>` : ''}
+        ${tt ? `<div class="cb2 b ${tt.c}">${tt.t}</div>` : ''}
+        ${info.no ? `<button type="button" class="btn pri wide" data-pay style="margin-top:10px">Thanh toán thẻ</button>` : ''}</div>` : ''}
       <div class="fld"><label for="w-ten">Tên ví</label><input class="inp" id="w-ten" name="ten" value="${esc(w ? w.ten_vi : '')}" autocomplete="off" ${w ? '' : 'autofocus'}></div>
       <div class="fld"><span class="lbl">Nhóm</span><div class="seg" role="radiogroup">${nhoms.map((n) => `<button type="button" role="radio" data-nhom="${esc(n)}" class="${n === nhom ? 'on' : ''}" aria-checked="${n === nhom}">${esc(n)}</button>`).join('')}</div></div>
       <div class="fld"><label for="w-sd">Số dư đầu</label><input class="inp" id="w-sd" name="sd" inputmode="text" value="${w ? (w.so_du_dau < 0 ? U.MINUS : '') + num(w.so_du_dau) : '0'}" autocomplete="off">
-        <div class="hint">Số tiền có sẵn trong ví trước giao dịch đầu tiên. Thẻ tín dụng đang nợ thì nhập số âm, ví dụ −1.200.000.</div></div>
+        <div class="hint" data-sdhint>${the() ? 'Dư nợ thẻ trước giao dịch đầu tiên, nhập số âm. Ví dụ đang nợ 1.200.000 thì nhập −1.200.000.' : 'Số tiền có sẵn trong ví trước giao dịch đầu tiên.'}</div></div>
+      <div data-the ${the() ? '' : 'hidden'}>
+        <div class="fld"><label for="w-hm">Hạn mức tín dụng</label><input class="inp" id="w-hm" name="hm" value="${esc(so(w && w.han_muc))}" placeholder="30.000.000" autocomplete="off"></div>
+        <div class="grid2"><div class="fld"><label for="w-sk">Ngày sao kê</label><input class="inp" id="w-sk" name="sk" inputmode="numeric" value="${esc((w && w.ngay_sao_ke) || '')}" placeholder="20" autocomplete="off"></div>
+          <div class="fld"><label for="w-dh">Ngày đến hạn trả</label><input class="inp" id="w-dh" name="dh" inputmode="numeric" value="${esc((w && w.ngay_den_han) || '')}" placeholder="5" autocomplete="off"></div></div>
+        <div class="hint" style="margin:-4px 0 10px">Ngày trong tháng (1–31), xem trên sao kê của ngân hàng. Ngày đến hạn nhỏ hơn ngày sao kê nghĩa là tháng sau. Thường cách nhau 15–25 ngày.</div>
+        <div class="grid2"><div class="fld"><label for="w-tt">% thanh toán tối thiểu</label><input class="inp" id="w-tt" name="tt" inputmode="decimal" value="${esc((w && w.tt_toi_thieu) || 5)}" autocomplete="off"></div>
+          <div class="fld"><label for="w-vt">Ví thanh toán</label><select class="inp" id="w-vt" name="vt"><option value="">(chọn khi trả)</option>${viKhac.map((x) => `<option ${w && w.vi_thanh_toan === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div></div>
+      </div>
       <label class="set flat"><span>Ví mặc định khi thêm giao dịch</span><span class="switch"><input type="checkbox" name="md" ${laMacDinh ? 'checked' : ''} aria-label="Ví mặc định"><i></i></span></label>
-      ${w ? `<div class="hint" style="margin:8px 0 0">Số dư tới hết tháng ${U.monthLabel(S.month)}: <b class="num">${w.bal < 0 ? U.MINUS : ''}${num(w.bal)} đ</b>. Đổi tên ví sẽ đổi luôn tên ví trong các giao dịch.</div>` : ''}
+      ${w ? `<div class="hint" style="margin:8px 0 0">${info ? '' : `Số dư tới hết tháng ${U.monthLabel(S.month)}: <b class="num">${w.bal < 0 ? U.MINUS : ''}${num(w.bal)} đ</b>. `}Đổi tên ví sẽ đổi luôn tên ví trong các giao dịch.</div>` : ''}
       <div class="okmsg" data-msg role="status"></div>
       <div class="btns"><button type="button" class="btn" data-x>Hủy</button><button class="btn pri">Lưu</button></div>
       ${w && !w.ngoai ? '<button type="button" class="btn danger del" data-del>Xóa ví</button>' : ''}
@@ -33,7 +53,14 @@ export function openWallet(key = '') {
     onMount: (b, close) => {
       b.addEventListener('click', async (e) => {
         const n = e.target.closest('[data-nhom]');
-        if (n) { nhom = n.dataset.nhom; b.querySelectorAll('[data-nhom]').forEach((x) => { x.classList.toggle('on', x === n); x.setAttribute('aria-checked', x === n); }); return; }
+        if (n) {
+          nhom = n.dataset.nhom;
+          b.querySelectorAll('[data-nhom]').forEach((x) => { x.classList.toggle('on', x === n); x.setAttribute('aria-checked', x === n); });
+          b.querySelector('[data-the]').hidden = !the();
+          b.querySelector('[data-sdhint]').textContent = the() ? 'Dư nợ thẻ trước giao dịch đầu tiên, nhập số âm. Ví dụ đang nợ 1.200.000 thì nhập −1.200.000.' : 'Số tiền có sẵn trong ví trước giao dịch đầu tiên.';
+          return;
+        }
+        if (e.target.closest('[data-pay]')) { close(); payCard(w.ten_vi); return; }
         if (e.target.closest('[data-del]')) {
           const dung = st.live().filter((t) => t.vi === w.ten_vi || t.vi_den === w.ten_vi).length;
           if (dung) { tagLoi(b, `Không xóa được: ví đang có ${dung} giao dịch. Hãy đổi tên ví, hoặc chuyển các giao dịch đó sang ví khác trước.`); return; }
@@ -45,19 +72,43 @@ export function openWallet(key = '') {
       });
       b.querySelector('form').onsubmit = async (e) => {
         e.preventDefault();
-        const ten = U.nfc(b.querySelector('[name=ten]').value);
-        const sd = U.parseSignedMoney(b.querySelector('[name=sd]').value);
+        const g = (k) => b.querySelector(`[name=${k}]`).value;
+        const ten = U.nfc(g('ten'));
+        const sd = U.parseSignedMoney(g('sd'));
         if (!ten) { tagLoi(b, 'Nhập tên ví.'); return; }
-        if (st.walletNames().some((x) => x !== (w && w.ten_vi) && x.toLowerCase() === ten.toLowerCase())) { tagLoi(b, `Đã có ví "${ten}".`); return; }
+        if (ten === '__new__' || st.walletNames().some((x) => x !== (w && w.ten_vi) && x.toLowerCase() === ten.toLowerCase())) { tagLoi(b, `Đã có ví "${ten}".`); return; }
         if (sd == null) { tagLoi(b, 'Số dư đầu chưa đúng. Ví dụ: 0, 1.500.000, −1.200.000'); return; }
-        await st.saveAcc({ ten_vi: ten, nhom, so_du_dau: sd }, w ? w.ten_vi : undefined);
+        const row = { ten_vi: ten, nhom, so_du_dau: sd };
+        if (the()) {
+          const hm = g('hm').trim() ? U.parseMoney(g('hm')) : 0;
+          if (g('hm').trim() && !hm) { tagLoi(b, 'Hạn mức chưa đúng. Ví dụ: 30tr, 30.000.000'); return; }
+          const ngay = (k) => { const v = g(k).trim(); if (!v) return 0; const x = Number(v); return Number.isInteger(x) && x >= 1 && x <= 31 ? x : null; };
+          const sk = ngay('sk'), dh = ngay('dh');
+          if (sk == null || dh == null) { tagLoi(b, 'Ngày sao kê / đến hạn là số từ 1 đến 31.'); return; }
+          if (dh && !sk) { tagLoi(b, 'Nhập ngày sao kê trước khi nhập ngày đến hạn.'); return; }
+          const tt = Number(String(g('tt')).replace(',', '.').replace('%', '')) || 0;
+          if (tt < 0 || tt > 100) { tagLoi(b, '% thanh toán tối thiểu từ 0 đến 100.'); return; }
+          Object.assign(row, { han_muc: hm, ngay_sao_ke: sk, ngay_den_han: dh, tt_toi_thieu: tt, vi_thanh_toan: g('vt') });
+        }
+        await st.saveAcc(row, w && !w.ngoai ? w.ten_vi : (w ? w.ten_vi : undefined));
         const md = b.querySelector('[name=md]').checked;
         if (md && st.setting('default_account') !== ten) await st.setSetting('default_account', ten);
         toast(w ? 'Đã lưu ví' : 'Đã thêm ví ' + ten);
         close();
+        if (onSaved) onSaved(ten);
       };
     }
   });
+}
+
+// Thanh toán thẻ: mở form chuyển khoản từ ví thanh toán sang thẻ, điền sẵn số cần trả (hoặc toàn bộ dư nợ)
+let openAddRef = null;
+export function payCard(ten) {
+  const a = st.wallets(S.month).find((x) => x.ten_vi === ten);
+  if (!a || !openAddRef) return;
+  const info = st.cardInfo(a);
+  const tu = a.vi_thanh_toan || st.walletNames().find((x) => x !== ten && !st.isCard(S.acc.find((y) => y.ten_vi === x) || {})) || '';
+  openAddRef({ loai: L.CHUYEN, vi: tu, vi_den: ten, so_tien: info.canTra || info.no, ghi_chu: 'Thanh toán thẻ ' + ten });
 }
 
 // ================= NGÂN SÁCH =================
@@ -201,24 +252,32 @@ export function openPerson(key = '') {
 // ================= DANH MỤC =================
 let catTab = 'chi';
 export function openCategories() {
+  let q = '';
   openSheet({
     title: 'Quản lý danh mục', cls: 'mid', raw: true,
     onMount: (b, close, el) => {
       const draw = () => {
-        const list = st.catsFor(catTab);
+        const qq = U.boDau(q);
+        const list = st.catsSorted(catTab).filter((c) => !qq || U.boDau(c.danh_muc + ' ' + c.nhom + ' ' + S.kw.filter((k) => k.danh_muc === c.danh_muc).map((k) => k.tu_khoa).join(' ')).includes(qq));
         const groups = [];
         list.forEach((c) => { const g = c.nhom || 'Khác'; let x = groups.find((y) => y.g === g); if (!x) groups.push(x = { g, cs: [] }); x.cs.push(c); });
         const kwN = (c) => S.kw.filter((k) => k.danh_muc === c.danh_muc).length;
         b.innerHTML = `<div class="utabs" role="tablist">${[['chi', 'Chi'], ['thu', 'Thu']].map(([k, t]) => `<button role="tab" class="${catTab === k ? 'on' : ''}" aria-selected="${catTab === k}" data-tab="${k}">${t}</button>`).join('')}</div>
-          <div class="sheet-b" style="padding-top:12px"><button class="btn wide" data-new>+ Thêm danh mục ${catTab === 'thu' ? 'thu' : 'chi'}</button></div>`
+          <div class="sheet-b" style="padding-top:12px"><input class="inp" type="search" data-q value="${esc(q)}" placeholder="Tìm danh mục, nhóm hoặc từ khóa…" autocomplete="off" aria-label="Tìm danh mục" style="margin-bottom:10px"><button class="btn wide" data-new>+ Thêm danh mục ${catTab === 'thu' ? 'thu' : 'chi'}</button></div>`
           + groups.map((x) => `<div class="opt-g"><span>${esc(x.g)}</span><button class="secbtn" data-rg="${esc(x.g)}">Đổi tên nhóm</button></div>`
             + x.cs.map((c) => `<button class="opt" data-c="${esc(c.danh_muc)}"><span class="optl"><span class="av sm" aria-hidden="true">${esc(c.ky_hieu || U.chuCai(c.danh_muc))}</span><span>${esc(c.danh_muc)}<span class="sub">${kwN(c) ? kwN(c) + ' từ khóa' : 'Chưa có từ khóa'}</span></span></span><span aria-hidden="true">›</span></button>`).join('')).join('')
-          + (groups.length ? '' : '<div class="empty">Chưa có danh mục.</div>');
+          + (groups.length ? '' : `<div class="empty">${q ? 'Không có danh mục khớp.' : 'Chưa có danh mục.'}</div>`);
       };
       draw();
       const off = st.onChange(draw);
       const obs = new MutationObserver(() => { if (!el.isConnected) { off(); obs.disconnect(); } });
       obs.observe(document.getElementById('layer'), { childList: true });
+      b.addEventListener('input', (e) => {
+        if (!e.target.matches('[data-q]')) return;
+        q = e.target.value; const pos = e.target.selectionStart;
+        draw();
+        const n = b.querySelector('[data-q]'); n.focus(); try { n.setSelectionRange(pos, pos); } catch (er) { /* bỏ qua */ }
+      });
       b.addEventListener('click', async (e) => {
         const t = e.target.closest('[data-tab]');
         if (t) { catTab = t.dataset.tab; draw(); return; }
@@ -311,7 +370,7 @@ export function openKeywords() {
       const off = st.onChange(draw);
       const obs = new MutationObserver(() => { if (!el.isConnected) { off(); obs.disconnect(); } });
       obs.observe(document.getElementById('layer'), { childList: true });
-      const catOpts = () => S.cat.map((c) => ({ v: c.danh_muc, label: (c.ky_hieu ? c.ky_hieu + '  ' : '') + c.danh_muc, group: (c.loai === 'thu' ? 'Thu · ' : 'Chi · ') + (c.nhom || 'Khác') }));
+      const catOpts = () => st.catsSorted('chi').concat(st.catsSorted('thu')).map((c) => ({ v: c.danh_muc, label: (c.ky_hieu ? c.ky_hieu + '  ' : '') + c.danh_muc, group: (c.loai === 'thu' ? 'Thu · ' : 'Chi · ') + (c.nhom || 'Khác') }));
       b.querySelector('[name=q]').addEventListener('input', (e) => { q = e.target.value; draw(); });
       b.addEventListener('click', async (e) => {
         if (e.target.closest('[data-pick]')) {
@@ -351,9 +410,11 @@ const NUM_FMT = ['1.234.567', '1,234,567', '1 234 567'];
 
 /** Xử lý data-act của các màn mới + Cài đặt. Trả true nếu đã xử lý. */
 export async function manageAct(a, b, ctx) {
+  openAddRef = ctx.openAdd;
   switch (a) {
     case 'w-add': openWallet(); return true;
     case 'w-edit': openWallet(b.dataset.k); return true;
+    case 'card-pay': openAddRef = ctx.openAdd; payCard(b.dataset.k); return true;
     case 'transfer': ctx.openAdd({ loai: L.CHUYEN }); return true;
     case 'b-edit': openBudget(b.dataset.k); return true;
     case 'b-add': openBudgetAdd(); return true;
@@ -370,7 +431,11 @@ export async function manageAct(a, b, ctx) {
       ctx.openAdd(init);
       return true;
     }
-    case 'st-tab': SV.stTab = b.dataset.v; ctx.render(); return true;
+    case 'st-tab': SV.stTab = b.dataset.v; SV.open = ''; ctx.render(); return true;
+    case 'st-per': perSet(b.dataset.v); SV.open = ''; ctx.render(); return true;
+    case 'st-prev': perShift(-1); ctx.render(); return true;
+    case 'st-next': perShift(1); ctx.render(); return true;
+    case 'st-grp': SV.open = SV.open === b.dataset.k ? '' : b.dataset.k; ctx.render(); return true;
     case 'set-name': {
       const v = await ask({ title: 'Tên hiển thị', label: 'Tên', value: st.setting('display_name'), hint: 'Lưu vào Settings trên Google Sheet.' });
       if (v != null) { await st.setSetting('display_name', U.nfc(v)); toast('Đã lưu tên hiển thị'); }

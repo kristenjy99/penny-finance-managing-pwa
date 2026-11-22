@@ -1,4 +1,4 @@
-/* ============ Penny – giao diện v0.5.0 ============
+/* ============ Penny – giao diện v0.5.1 ============
    Màu theo SPEC mục 4. Viền 1px, không đổ bóng. Chỉ thanh điều hướng bo tròn. */
 
 :root, [data-theme="light"] {
@@ -347,6 +347,47 @@ button.set { cursor: pointer; }
 .imp-list > div { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .imp-list > div > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ============ v0.5.1 ============ */
+/* Thống kê: chọn khoảng, chú thích mở được chi tiết danh mục */
+.perbar { padding: 10px 20px 0; border-bottom: 1px solid var(--line); }
+.perbar .seg { display: flex; }
+.perbar .seg button { flex: 1; min-height: 36px; }
+.pnav { display: flex; align-items: center; justify-content: center; gap: 6px; height: 44px; }
+.pnav b { font: 700 17px "Baloo 2", sans-serif; padding-top: 2px; min-width: 170px; text-align: center; }
+.pnav button { border: 0; background: none; font-size: 22px; width: 44px; height: 44px; color: var(--ink); }
+button.leg { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: var(--bg); color: var(--ink); text-align: left; font-family: inherit; cursor: pointer; }
+.leg .chev { width: 14px; flex: none; text-align: center; font-size: 13px; color: var(--ink2); }
+.leg-sub { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 4px 20px 4px 48px; background: var(--bg2); border-bottom: 1px solid var(--line); font-size: 15px; }
+.leg-sub .k { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.leg-sub .num { text-align: right; font-weight: 600; }
+.leg-sub small { display: block; font-size: 12px; font-weight: 500; color: var(--ink2); }
+.sec .unit { font: 600 12px "Nunito", sans-serif; color: var(--ink2); margin-left: 4px; }
+.mbars { padding: 8px 20px 20px; }
+
+/* Ví: thẻ tín dụng */
+.cardline { padding: 0 20px 10px; background: var(--bg); border-bottom: 1px solid var(--line); margin-top: -1px; }
+.cl3 { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cl3 .btn.sm { flex: none; min-height: 32px; }
+.cl { flex: 1; min-width: 0; }
+.cl1 { font-size: 13px; color: var(--ink2); line-height: 18px; }
+.cl1 b { color: var(--ink); font-weight: 700; }
+.cl .bar { height: 7px; margin: 5px 0 4px; }
+.cl2 { font-size: 13px; font-weight: 700; line-height: 18px; }
+.cardbox { border: 1px solid var(--bd); background: var(--bg2); padding: 12px 14px; margin: 6px 0 14px; }
+.cb1 { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; color: var(--ink2); }
+.cb1 b { font: 700 18px "Baloo 2", sans-serif; }
+.cardbox .bar { margin: 6px 0 4px; }
+.cb2 { font-size: 13px; color: var(--ink2); line-height: 1.45; margin-top: 4px; }
+.cb2.b { font-weight: 700; color: var(--ink); }
+.cb2.b.exp { color: var(--exp); } .cb2.b.inc { color: var(--inc); }
+
+/* Hộp chọn danh mục */
+.pick-top { padding-top: 10px; position: sticky; top: 0; background: var(--bg); z-index: 1; border-bottom: 1px solid var(--line); }
+.nho { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; margin-top: 8px; min-height: 32px; cursor: pointer; }
+.nho input { width: 18px; height: 18px; accent-color: var(--acc2); }
+.sheet .opt.new { color: var(--inc); font-weight: 700; }
+.chip.on { background: var(--acc); }
+
 /* ============ PC ≥ 900px ============ */
 @media (min-width: 900px) {
   .app { display: grid; grid-template-columns: 232px minmax(0, 1fr); }
@@ -448,6 +489,14 @@ button.set { cursor: pointer; }
   .btbl .bar { margin-right: 7px; }
   .btbl small { font-size: 12px; color: var(--ink2); margin-left: 6px; }
   .note { padding: 14px 28px; }
+  .perbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 28px; }
+  .perbar .seg { display: inline-flex; }
+  .perbar .seg button { min-width: 72px; min-height: 32px; }
+  .pnav { height: 40px; }
+  .tbl .tr.sub { grid-template-columns: 1fr; display: flex; gap: 16px; min-height: 0; padding: 0 28px 10px; margin-top: -1px; }
+  .tbl .tr.sub .cl { flex: 1; max-width: 760px; }
+  .leg-sub { padding-left: 47px; }
+  .st-l .leg-sub { font-size: 14px; }
 
   /* Công nợ PC: danh sách trái 460px + panel lịch sử */
   .dgrid { display: grid; grid-template-columns: 460px minmax(0, 1fr); }

@@ -1,11 +1,11 @@
 // Service worker của Penny: cache khung app để mở được khi mất mạng.
 // MỖI LẦN PHÁT HÀNH: đổi VERSION để máy người dùng tải bản mới.
-const VERSION = 'penny-v0.5.0';
+const VERSION = 'penny-v0.5.1';
 const FONT_CACHE = 'penny-fonts';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/util.js', 'js/db.js', 'js/store.js', 'js/sync.js', 'js/ui.js', 'js/form.js',
-  'js/screens.js', 'js/manage.js', 'js/csv.js', 'js/xlsx.js',
+  'js/screens.js', 'js/manage.js', 'js/csv.js', 'js/xlsx.js', 'js/pick.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'
 ];
 

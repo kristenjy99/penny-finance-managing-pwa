@@ -1,9 +1,9 @@
-// Penny v0.5.1 – các màn Thống kê, Ví, Ngân sách, Công nợ (mobile + PC)
+// Penny v0.5.2 – các màn Thống kê, Ví, Ngân sách, Công nợ (mobile + PC)
 import * as U from './util.js';
 import { esc, num, MINUS } from './util.js';
 import * as st from './store.js';
 import { S, L, NHAN, NO_TYPES } from './store.js';
-import { piggySvg } from './ui.js';
+import { brandMark } from './ui.js';
 
 // Trạng thái riêng của các màn này
 export const SV = { stTab: 'chi', person: '', per: 'thang', anchor: '', open: '' };
@@ -13,7 +13,52 @@ const plus = (n) => (n ? '+' : '') + num(n);
 const minus = (n) => (n ? MINUS : '') + num(n);
 const net = (n) => (n < 0 ? MINUS : '') + num(n);
 const netSigned = (n) => (n > 0 ? '+' : n < 0 ? MINUS : '') + num(n);
-const piggyTile = () => `<span class="piggy" aria-hidden="true">${piggySvg('var(--tile-fg)', 'var(--tile)')}</span>`;
+const piggyTile = () => `<span class="piggy" aria-hidden="true">${brandMark()}</span>`;
+
+// Biểu tượng ví: ảnh (data:image), emoji / chữ tự đặt, hoặc chữ cái đầu tên ví
+export const walletIcon = (w) => {
+  const k = String((w && w.ky_hieu) || '');
+  return /^data:image\//.test(k) ? `<img src="${esc(k)}" alt="">` : esc(k || U.chuCai(w.ten_vi));
+};
+
+// Tên bộ màu đang dùng (Cài đặt → Màu giao diện)
+export const MAU_SAN = [
+  { id: 'penny', ten: 'Penny hồng (mặc định)', acc: '#C5B3D3', bg: '#FBEFEF', bg2: '#FFE2E2', line: '#F5CBCB', bd: '#E4CDD6' },
+  { id: 'bacha', ten: 'Bạc hà', acc: '#A8D5C8', bg: '#F1FAF6', bg2: '#DFF3EC', line: '#C4E6DA', bd: '#CFE3DC' },
+  { id: 'dao', ten: 'Đào', acc: '#F3C1A5', bg: '#FFF6F0', bg2: '#FFE7D9', line: '#F8D2BD', bd: '#EBD3C6' },
+  { id: 'bien', ten: 'Biển', acc: '#A9C4E8', bg: '#F2F7FD', bg2: '#E1ECFA', line: '#C8DAF2', bd: '#D4DFEE' },
+  { id: 'xam', ten: 'Xám tối giản', acc: '#CFCFD6', bg: '#F7F7F8', bg2: '#EDEDF0', line: '#DCDCE2', bd: '#E1E1E6' }
+];
+export function colorName() {
+  const c = st.themeColors();
+  if (!c.acc) return MAU_SAN[0].ten;
+  const p = MAU_SAN.find((x) => x.id === c.preset);
+  return p ? p.ten : 'Tùy chỉnh';
+}
+
+// Nhắc trả thẻ tín dụng trong app: từ 1 ngày trước hạn trả, kỳ sao kê còn nợ, chưa bấm "Chưa trả" hôm nay
+const NHAC_KEY = 'penny_nhac_the';
+export function dueCards() {
+  const td = U.today();
+  let bo = {};
+  try { bo = JSON.parse(localStorage.getItem(NHAC_KEY) || '{}'); } catch (e) { bo = {}; }
+  return S.acc.filter(st.isCard).map((a) => ({ a, i: st.cardInfo(a, td) }))
+    .filter((x) => x.i.canTra > 0 && x.i.hanTra && x.i.conNgay <= 1 && bo[x.a.ten_vi] !== td);
+}
+export function snoozeCard(ten) {
+  let bo = {};
+  try { bo = JSON.parse(localStorage.getItem(NHAC_KEY) || '{}'); } catch (e) { bo = {}; }
+  bo[ten] = U.today();
+  localStorage.setItem(NHAC_KEY, JSON.stringify(bo));
+}
+export function dueBanner() {
+  return dueCards().map(({ a, i }) => {
+    const khi = i.conNgay === 1 ? 'ngày mai' : i.conNgay === 0 ? 'hôm nay' : `đã quá hạn ${-i.conNgay} ngày`;
+    return `<div class="duebar" role="alert"><span class="av" aria-hidden="true">${walletIcon(a)}</span>
+      <div class="dt"><b>${esc(a.ten_vi)}</b>: cần trả <b class="num">${num(i.canTra)} đ</b> trước ${U.dm(i.hanTra)} (${khi})${i.toiThieu ? ` · tối thiểu ${num(i.toiThieu)}` : ''}. Bạn đã trả chưa?</div>
+      <div class="db"><button class="btn sm pri" data-act="due-paid" data-k="${esc(a.ten_vi)}">Đã trả</button><button class="btn sm" data-act="due-later" data-k="${esc(a.ten_vi)}">Chưa trả</button></div></div>`;
+  }).join('');
+}
 
 // Dải số liệu: items = [{lb, vl, c}]
 export const bandOf = (items, cls = '') => `<div class="band ${cls}">${items.map((x) => `<div><div class="lb">${x.lb}</div><div class="vl num ${x.c || ''}">${x.vl}</div></div>`).join('')}</div>`;
@@ -239,6 +284,12 @@ function cardLine(w, pc) {
   return pc ? `<div class="tr sub">${body}</div>` : `<div class="cardline">${body}</div>`;
 }
 
+// Dải tổng số dư theo từng nhóm ví (Tiền mặt / Ví điện tử / Ngân hàng / Thẻ tín dụng)
+function groupBand(gs) {
+  if (gs.length < 2) return '';
+  return bandOf(gs.map((g) => { const t = U.sum(g.ws, (w) => w.bal); return { lb: g.nhom, vl: net(t), c: t < 0 ? 'exp' : '' }; }), 'gband');
+}
+
 export function walletGroups() {
   const ws = st.wallets(S.month);
   const order = st.NHOM_VI.slice();
@@ -263,19 +314,21 @@ export function walletsHtml(pc) {
   if (!pc) {
     const list = gs.map((g) => `<div class="sec"><span>${esc(g.nhom)}</span><span class="r num">${net(U.sum(g.ws, (w) => w.bal))}</span></div>`
       + g.ws.map((w) => `<button class="row" data-act="w-edit" data-k="${esc(w.ten_vi)}">
-        <span class="av" aria-hidden="true">${esc(U.chuCai(w.ten_vi))}</span>
+        <span class="av" aria-hidden="true">${walletIcon(w)}</span>
         <span class="mid"><span class="t1" style="display:block">${esc(w.ten_vi)}${st.defaultAccount() === w.ten_vi ? ' <span class="tag">mặc định</span>' : ''}</span><span class="t2" style="display:block">Thu ${num(w.thu)} · Chi ${num(w.chi)}</span></span>
         <span class="amt num ${balC(w.bal)}">${net(w.bal)}</span></button>` + (w.nhom === st.NHOM_THE ? cardLine(w, false) : '')).join('')).join('');
     return bandOf([{ lb: 'Tổng thu', vl: plus(tt.thu), c: 'inc' }, { lb: 'Tổng chi', vl: minus(tt.chi), c: 'exp' }])
+      + groupBand(gs)
       + (list || '<div class="empty">Chưa có ví nào.</div>')
       + `<div class="btns pad"><button class="btn" data-act="transfer">Chuyển khoản</button><button class="btn pri" data-act="w-add">+ Thêm ví</button></div>` + netNote(nw);
   }
   const all = gs.flatMap((g) => g.ws);
   const rows = all.map((w) => `<button class="tr" data-act="w-edit" data-k="${esc(w.ten_vi)}">
-      <span class="b">${esc(w.ten_vi)}${st.defaultAccount() === w.ten_vi ? ' <span class="tag">mặc định</span>' : ''}</span><span>${esc(w.nhom || 'Khác')}</span>
+      <span class="b wname"><span class="av xs" aria-hidden="true">${walletIcon(w)}</span>${esc(w.ten_vi)}${st.defaultAccount() === w.ten_vi ? ' <span class="tag">mặc định</span>' : ''}</span><span>${esc(w.nhom || 'Khác')}</span>
       <span class="r num">${num(w.thu)}</span><span class="r num">${num(w.chi)}</span><span class="r num b ${balC(w.bal)}">${net(w.bal)}</span></button>` + (w.nhom === st.NHOM_THE ? cardLine(w, true) : '')).join('');
   return bandOf([{ lb: 'Tổng số dư', vl: net(nw.total) + ' đ', c: nw.total < 0 ? 'exp' : '' }, { lb: 'Tài sản', vl: num(nw.assets) }, { lb: 'Nợ', vl: minus(nw.liab), c: 'exp' },
     { lb: 'Tổng thu', vl: plus(tt.thu), c: 'inc' }, { lb: 'Tổng chi', vl: minus(tt.chi), c: 'exp' }])
+    + groupBand(gs)
     + `<div class="tbl wtbl"><div class="th"><span>Ví</span><span>Nhóm</span><span class="r">Thu</span><span class="r">Chi</span><span class="r">Số dư</span></div>${rows}
       <div class="tr tot"><span>Tổng cộng</span><span></span><span class="r num">${num(U.sum(all, (w) => w.thu))}</span><span class="r num">${num(U.sum(all, (w) => w.chi))}</span><span class="r num ${balC(nw.total)}">${net(nw.total)}</span></div></div>`
     + netNote(nw);

@@ -1,6 +1,6 @@
 // Service worker của Penny: cache khung app để mở được khi mất mạng.
 // MỖI LẦN PHÁT HÀNH: đổi VERSION để máy người dùng tải bản mới.
-const VERSION = 'penny-v0.5.1';
+const VERSION = 'penny-v0.5.2';
 const FONT_CACHE = 'penny-fonts';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',

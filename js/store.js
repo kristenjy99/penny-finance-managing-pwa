@@ -1,6 +1,7 @@
 // Dữ liệu trong bộ nhớ + lưu IndexedDB + hàng đợi thay đổi + các phép tính
 import * as db from './db.js';
 import { boDau, nfc, chuanCoDau, chuanKhongDau, nowIso, uid, ym, thisMonth, sum, setNumFormat, today, toDate } from './util.js';
+import { setBrandIcon } from './ui.js';
 
 // Loại giao dịch: dùng đúng chuỗi bot ghi trong Sheet
 export const L = { CHI: 'chi', THU: 'thu', CHUYEN: 'chuyển', CHO_VAY: 'cho vay', DI_VAY: 'đi vay', THU_NO: 'thu nợ', TRA_NO: 'trả nợ' };
@@ -69,14 +70,46 @@ export function themeMode() {
   const t = boDau(setting('theme', localStorage.getItem('penny_theme') || 'auto'));
   return t.startsWith('sang') || t === 'light' ? 'light' : t.startsWith('toi') || t === 'dark' ? 'dark' : 'auto';
 }
+// ---------- Giao diện riêng: tên app, icon app, màu (Settings: app_name, app_icon, theme_colors) ----------
+export const appName = () => setting('app_name', 'Penny');
+// Màu giao diện sáng (theme_colors là JSON {preset, acc, bg, bg2, line, bd, inc, exp}); {} = mặc định
+export function themeColors() { try { const o = JSON.parse(setting('theme_colors', '{}')); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
+const HEX = /^#[0-9a-f]{6}$/i;
+// Pha 2 màu hex theo tỉ lệ t (0..1)
+export function mixHex(a, b, t) {
+  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const x = p(a), y = p(b);
+  return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+function applyBrand(dark) {
+  const c = themeColors();
+  const tok = { acc: '--acc', bg: '--bg', bg2: '--bg2', line: '--line', bd: '--bd', inc: '--inc', exp: '--exp' };
+  let css = '';
+  Object.entries(tok).forEach(([k, v]) => { if (HEX.test(c[k] || '')) css += `${v}:${c[k]};`; });
+  if (HEX.test(c.acc || '')) css += `--acc2:${mixHex(c.acc, '#3A2E4D', 0.25)};`;
+  let st = document.getElementById('brand-css');
+  if (!st) { st = document.createElement('style'); st.id = 'brand-css'; document.head.appendChild(st); }
+  st.textContent = css ? `[data-theme="light"]{${css}}` : '';
+  const meta = document.querySelector('meta[name=theme-color]');
+  if (meta) meta.content = dark ? '#5B4A72' : (HEX.test(c.acc || '') ? c.acc : '#C5B3D3');
+  document.title = appName();
+  const icon = setting('app_icon');
+  setBrandIcon(icon);
+  const ok = /^data:image\//.test(icon);
+  document.querySelectorAll('link[rel=icon]').forEach((l, i) => {
+    if (!l.dataset.goc) l.dataset.goc = l.getAttribute('href') + '|' + (l.getAttribute('type') || '');
+    const [href, type] = l.dataset.goc.split('|');
+    l.href = ok ? icon : href;
+    l.type = ok ? 'image/png' : type;
+  });
+}
 export function applySettings() {
   setNumFormat(setting('number_format', '1.234.567'));
   const mode = themeMode();
   localStorage.setItem('penny_theme', mode);
   const dark = mode === 'dark' || (mode === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  const meta = document.querySelector('meta[name=theme-color]');
-  if (meta) meta.content = dark ? '#5B4A72' : '#C5B3D3';
+  applyBrand(dark);
 }
 
 // ---------- Hàng đợi ----------
@@ -156,6 +189,10 @@ async function renameInTx(col, oldV, newV) {
 export async function saveAcc(row, oldKey) {
   const r0 = row;
   row = { ten_vi: nfc(row.ten_vi), nhom: nfc(row.nhom) || NHOM_VI[0], so_du_dau: Math.round(Number(row.so_du_dau) || 0) };
+  // Biểu tượng ví (emoji, chữ hoặc ảnh nhỏ data:image) và tên tắt cho bot: chỉ gửi khi có / khi đã từng có
+  const cu = S.acc.find((a) => a.ten_vi === (oldKey || row.ten_vi)) || {};
+  if (r0.ky_hieu !== undefined && (r0.ky_hieu || cu.ky_hieu)) row.ky_hieu = String(r0.ky_hieu || '');
+  if (r0.viet_tat !== undefined && (r0.viet_tat || cu.viet_tat)) row.viet_tat = nfc(r0.viet_tat);
   // Thẻ tín dụng: hạn mức, ngày sao kê, ngày đến hạn, % thanh toán tối thiểu, ví thanh toán
   if (row.nhom === NHOM_THE) {
     const ngay = (v) => { const n = Math.round(Number(v)); return n >= 1 && n <= 31 ? n : 0; };

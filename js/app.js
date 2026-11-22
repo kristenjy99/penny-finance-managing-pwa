@@ -1,11 +1,11 @@
-// Penny PWA v0.5.1 – khung app, điều hướng, các màn hình
+// Penny PWA v0.5.2 – khung app, điều hướng, các màn hình
 import * as U from './util.js';
 import { esc, num, MINUS } from './util.js';
 import * as st from './store.js';
 import { S, L, NHAN, NO_TYPES, DAU } from './store.js';
 import * as sy from './sync.js';
 import * as db from './db.js';
-import { ICON, piggySvg, isPC, toast, openSheet, closeAllSheets, confirmBox, pickOne, monthPick, monthPill } from './ui.js';
+import { ICON, brandMark, isPC, toast, openSheet, closeAllSheets, confirmBox, pickOne, monthPick, monthPill } from './ui.js';
 import { mountTxForm } from './form.js';
 import * as SC from './screens.js';
 import { manageAct } from './manage.js';
@@ -128,7 +128,7 @@ function budgetBlock() {
   }).join('');
 }
 
-const notConnected = () => (sy.connected() ? '' : `<button class="banner" data-act="conn"><span class="piggy">${piggySvg('var(--tile-fg)', 'var(--tile)')}</span>
+const notConnected = () => (sy.connected() ? '' : `<button class="banner" data-act="conn"><span class="piggy">${brandMark()}</span>
   <span>Chưa kết nối Google Sheet<small>Bấm để nhập URL API và secret token. Giao dịch nhập lúc này vẫn được lưu trên máy.</small></span><span aria-hidden="true">›</span></button>`);
 
 // ================= LỊCH =================
@@ -259,7 +259,7 @@ function summaryView() {
 function renderSide() {
   const items = NAV.map((n) => `<a href="#/${n.r}" class="${navOn(n.r) ? 'on' : ''}">${ICON[n.i]}<span>${n.t}</span></a>`).join('');
   const s = syncState();
-  $('#side').innerHTML = `<div class="logo"><span class="piggy">${piggySvg('var(--tile-fg)', 'var(--tile)')}</span>Penny</div>
+  $('#side').innerHTML = `<div class="logo"><span class="piggy">${brandMark()}</span>${esc(st.appName())}</div>
     <nav aria-label="Điều hướng">${items}</nav>
     <div class="syncbox"><div class="s1">Google Sheet</div><div class="s2">${esc(s.line)}</div>
       <button class="btn" data-act="sync" ${S.syncing ? 'disabled' : ''}>${S.syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}</button>
@@ -283,7 +283,7 @@ function syncState() {
 function renderTop() {
   const pc = isPC();
   const top = $('#top');
-  const piggy = `<span class="piggy" aria-hidden="true">${piggySvg('var(--tile-fg)', 'var(--tile)')}</span>`;
+  const piggy = `<span class="piggy" aria-hidden="true">${brandMark()}</span>`;
   const addBtn = `<button class="tbtn" data-act="add">+ Thêm giao dịch</button>`;
   let title = 'Giao dịch', right = '', tabs = '', back = '', hero = '';
   if (V.route === 'gd' || (V.route === 'sua' && pc)) {
@@ -306,7 +306,7 @@ function renderTop() {
   }
   top.className = 'top' + (tabs ? ' has-tabs' : '') + (hero ? ' has-hero' : '');
   top.innerHTML = `<div class="top-row"><div class="top-l">${back}<h1>${title}</h1></div><div class="top-right">${right}</div></div>${tabs}${hero}`;
-  document.title = title === 'Giao dịch' ? 'Penny' : title + ' · Penny';
+  document.title = title === 'Giao dịch' ? st.appName() : title + ' · ' + st.appName();
 }
 
 // ================= NỘI DUNG =================
@@ -325,10 +325,10 @@ function renderContent() {
   if (V.route === 'gd' || (V.route === 'sua' && pc)) {
     if (pc) {
       if (fresh) { c.innerHTML = `<div class="split"><div id="gdl"></div><aside class="side-panel" id="gdp" aria-label="Thêm / sửa giao dịch"></aside></div>`; panelKey = ''; }
-      $('#gdl').innerHTML = pcList();
+      $('#gdl').innerHTML = SC.dueBanner() + pcList();
       mountPanel();
     } else {
-      c.innerHTML = mobileGd();
+      c.innerHTML = SC.dueBanner() + mobileGd();
     }
   } else if (V.route === 'lich') {
     c.innerHTML = band(monthList()) + `<div class="split cal-split"><div>${calendar(true)}</div><aside class="side-panel"><div class="cal-panel">${dayDetail()}</div></aside></div>`;
@@ -342,7 +342,7 @@ function renderContent() {
   } else if (V.route === 'thongke') {
     c.innerHTML = notConnected() + SC.statsHtml(pc);
   } else if (V.route === 'vi') {
-    c.innerHTML = notConnected() + SC.walletsHtml(pc);
+    c.innerHTML = notConnected() + SC.dueBanner() + SC.walletsHtml(pc);
   } else if (V.route === 'ngansach') {
     c.innerHTML = notConnected() + SC.budgetsHtml(pc);
   } else if (V.route === 'congno') {
@@ -408,7 +408,7 @@ function openAdd(init = null) {
     title: 'Thêm giao dịch', cls: 'mid', raw: true,
     body: `<div class="utabs" role="tablist"><button role="tab" class="on" data-tab="tay" aria-selected="true">Nhập tay</button><button role="tab" data-tab="anh" aria-selected="false">Ảnh / Sao kê</button></div>
       <div class="sheet-b" data-pane="tay"></div>
-      <div class="sheet-b" data-pane="anh" hidden><div class="stub"><span class="piggy">${piggySvg('var(--tile-fg)', 'var(--tile)')}</span>
+      <div class="sheet-b" data-pane="anh" hidden><div class="stub"><span class="piggy">${brandMark()}</span>
         <div><b>Có ở bản v0.6.0</b><span>Thêm giao dịch từ ảnh chụp, PDF, CSV hoặc Excel sao kê ngân hàng, đọc ngay trên máy.</span></div></div></div>`,
     onMount: (b, close) => {
       mountTxForm(b.querySelector('[data-pane=tay]'), { variant: 'sheet', init, onDone: () => close() });
@@ -446,6 +446,10 @@ function settingsHtml(pc) {
       ${[['light', 'Sáng', 'sáng'], ['dark', 'Tối', 'tối'], ['auto', 'Tự động', 'tự động']].map(([k, t, v]) => `<button role="radio" aria-checked="${theme === k}" class="${theme === k ? 'on' : ''}" data-act="theme" data-v="${v}">${t}</button>`).join('')}</span></div>
     ${go2('set-numfmt', 'Định dạng số', num(1234567) + ' đ')}
     ${go2('set-week', 'Tuần bắt đầu', ws)}
+    <div class="sec" id="s-rieng">Giao diện riêng</div>
+    ${go2('set-appname', 'Tên app', st.appName())}
+    <button class="set" data-act="set-appicon"><span>Icon app</span><span class="val"><span class="piggy mini" aria-hidden="true">${brandMark()}</span> ›</span></button>
+    ${go2('set-colors', 'Màu giao diện', SC.colorName())}
     <div class="sec" id="s-dm">Danh mục & từ khóa</div>
     ${go2('cat-mgr', 'Quản lý danh mục', '')}
     ${go2('kw-mgr', 'Từ khóa tự phân loại', '')}
@@ -460,7 +464,7 @@ function settingsHtml(pc) {
     <button class="set danger" data-act="wipe"><span>Xóa dữ liệu trên máy</span><span class="val">›</span></button>
     <div class="ver">Penny v${U.VERSION} · API v${esc(S.apiVer || '?')}</div>`;
   if (!pc) return body;
-  const nav = [['tt', 'Thông tin'], ['ht', 'Hiển thị'], ['dm', 'Danh mục & từ khóa'], ['db', 'Đồng bộ & dữ liệu']]
+  const nav = [['tt', 'Thông tin'], ['ht', 'Hiển thị'], ['rieng', 'Giao diện riêng'], ['dm', 'Danh mục & từ khóa'], ['db', 'Đồng bộ & dữ liệu']]
     .map(([k, t]) => `<button class="${V.setSec === k ? 'on' : ''}" data-act="setsec" data-sec="${k}">${t}</button>`).join('');
   return `<div class="setwrap"><nav class="setnav" aria-label="Mục cài đặt">${nav}</nav><div class="setbody">${body}</div></div>`;
 }

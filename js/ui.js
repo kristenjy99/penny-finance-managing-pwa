@@ -9,7 +9,7 @@ export const ICON = {
   wallet: sv('<rect x="3" y="5.5" width="18" height="13.5" rx="2"/><path d="M21 9.5h-5a2.5 2.5 0 0 0 0 5h5"/>'),
   budget: sv('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5"/>'),
   debt: sv('<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.8a3.3 3.3 0 0 1 2.6 3.2c0 1.6-1.1 2.9-2.6 3.2M18.5 14.5c1.8.8 3 2.7 3 5"/>'),
-  set: sv('<circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/>')
+  set: sv('<path d="M19.04 9.71 L21.38 9.94 L21.38 14.06 L19.04 14.29 L18.59 15.36 L20.09 17.18 L17.18 20.09 L15.36 18.59 L14.29 19.04 L14.06 21.38 L9.94 21.38 L9.71 19.04 L8.64 18.59 L6.82 20.09 L3.91 17.18 L5.41 15.36 L4.96 14.29 L2.62 14.06 L2.62 9.94 L4.96 9.71 L5.41 8.64 L3.91 6.82 L6.82 3.91 L8.64 5.41 L9.71 4.96 L9.94 2.62 L14.06 2.62 L14.29 4.96 L15.36 5.41 L17.18 3.91 L20.09 6.82 L18.59 8.64 Z"/><circle cx="12" cy="12" r="3.2"/>')  // bánh răng
 };
 
 // Heo đất (cùng hình với icon app): fg = màu heo, cut = màu khe/mắt (trùng nền ô)
@@ -23,7 +23,11 @@ export function piggySvg(fg = 'currentColor', cut = 'var(--tile)') {
     <rect x="25" y="23" width="13" height="3.4" rx="1.7" fill="${cut}"/><circle cx="42.5" cy="31" r="2.1" fill="${cut}"/><circle cx="51" cy="35.5" r="1.2" fill="${cut}"/>
   </g></svg>`;
 }
-export const piggyBtn = (act = '') => `<button class="piggy" ${act ? `data-act="${act}"` : 'tabindex="-1"'} aria-label="Penny">${piggySvg('var(--tile-fg)', 'var(--tile)')}</button>`;
+// Logo app: ảnh người dùng chọn (Cài đặt → Icon app) hoặc heo mặc định
+let BRAND_ICON = '';
+export const setBrandIcon = (u) => { BRAND_ICON = /^data:image\//.test(u || '') ? u : ''; };
+export const brandMark = () => (BRAND_ICON ? `<img src="${BRAND_ICON}" alt="">` : piggySvg('var(--tile-fg)', 'var(--tile)'));
+export const piggyBtn = (act = '') => `<button class="piggy" ${act ? `data-act="${act}"` : 'tabindex="-1"'} aria-label="Logo">${brandMark()}</button>`;
 
 export const isPC = () => matchMedia('(min-width: 900px)').matches;
 

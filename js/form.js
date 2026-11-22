@@ -58,6 +58,15 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
     return `${v}<span aria-hidden="true">▾</span>`;
   }
 
+  // Ví là thẻ tín dụng: nói rõ giao dịch làm dư nợ tăng hay giảm
+  function cardHint() {
+    const ten = f.loai === L.CHUYEN && st.isCard(st.S.acc.find((a) => a.ten_vi === f.vi_den) || {}) ? f.vi_den : f.vi;
+    const a = st.S.acc.find((x) => x.ten_vi === ten);
+    if (!a || !st.isCard(a)) return '';
+    const i = st.cardInfo(a, today());
+    const vao = (f.loai === L.CHUYEN && ten === f.vi_den) || (st.DAU[f.loai] || 0) > 0;
+    return `💳 ${esc(ten)}: ${vao ? 'tiền vào thẻ → dư nợ giảm' : 'chi bằng thẻ → dư nợ tăng'}. Dư nợ hiện tại ${num(i.no)} đ${i.lim ? `, hạn mức còn ${num(i.con)} đ` : ''}.`;
+  }
   function draw() {
     const pc = variant === 'panel';
     const isNo = isNoNow();
@@ -95,6 +104,7 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
     if (pc) vung = fTien + fGhiChu + fDanhMuc + fNguoi + (f.loai === L.CHUYEN ? `<div class="grid2">${fVi}${fViDen}</div>` : fVi) + fNgay;
     else if (f.loai === L.CHUYEN) vung = fTien + fGhiChu + `<div class="grid2">${fVi}${fViDen}</div>` + fNgay;
     else vung = fTien + fGhiChu + fDanhMuc + fNguoi + `<div class="grid2">${fVi}${fNgay}</div>`;
+    vung += `<div class="hint cardhint" data-cardhint>${cardHint()}</div>`;
 
     const luu = `<button class="btn pri" type="submit">Lưu</button>`;
     const huy = `<button class="btn" type="button" data-cancel>Hủy</button>`;
@@ -103,7 +113,7 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
       ${typeSel}${noSel}${noHint}${vung}
       <div class="btns">${pc ? luu + huy : huy + luu}</div>
       ${tx ? '<button class="btn danger del" type="button" data-del>Xóa giao dịch</button>' : ''}
-      ${pc && !tx ? '<div class="tip">Mẹo: gõ 38000/cafe /cafe trên Telegram, giao dịch tự xuất hiện ở đây.</div>' : ''}
+      ${pc && !tx ? '<div class="tip">Mẹo: gõ 20k/cafe/Cà phê/tm trên Telegram (số tiền/ghi chú/danh mục/ví), giao dịch tự xuất hiện ở đây.</div>' : ''}
       ${tx && tx.nguon === 'bot' ? '<div class="tip">Giao dịch này được ghi từ bot Telegram.</div>' : ''}
     </form>`;
   }
@@ -134,6 +144,7 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
       return;
     }
     f[e.target.name] = e.target.value;
+    if (e.target.name === 'vi' || e.target.name === 'vi_den') { const h = el.querySelector('[data-cardhint]'); if (h) h.innerHTML = cardHint(); }
     if (e.target.name === 'ngay') { const s = e.target.parentNode.querySelector('.dshow span'); if (s) s.textContent = f.ngay ? dmy(f.ngay) : 'Chọn ngày'; }
   });
   // Bấm ô ngày (máy tính): mở luôn bộ chọn ngày

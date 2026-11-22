@@ -4,7 +4,8 @@ import { esc, num } from './util.js';
 import * as st from './store.js';
 import { S, L } from './store.js';
 import { openSheet, confirmBox, toast, pickOne, ask } from './ui.js';
-import { SV, budStatus, cardStatus, perSet, perShift } from './screens.js';
+import { SV, budStatus, cardStatus, perSet, perShift, walletIcon, MAU_SAN, snoozeCard } from './screens.js';
+import { zipStore } from './xlsx.js';
 import { openCsv } from './csv.js';
 
 const same = (a, b) => U.boDau(a) === U.boDau(b);
@@ -22,6 +23,9 @@ export function openWallet(key = '', onSaved = null) {
   const tt = info ? cardStatus(info) : '';
   const viKhac = st.walletNames().filter((x) => x !== (w && w.ten_vi) && !st.isCard(st.S.acc.find((a) => a.ten_vi === x) || {}));
   const so = (v) => (v ? num(v) : '');
+  let icon = w ? String(w.ky_hieu || '') : '';
+  const ICONS = ['💵', '👛', '📱', '🏦', '💳', '💰', '🐷', '🪙', '🏧', '💼', '🏠', '🎓'];
+  const tat = (ten) => U.boDau(ten).split(/[^0-9a-z]+/).filter(Boolean).map((x) => x[0]).join('');
   openSheet({
     title: w ? (st.isCard(w) ? 'Thẻ tín dụng' : 'Sửa ví') : 'Thêm ví', cls: 'mid',
     body: `<form novalidate>
@@ -33,6 +37,11 @@ export function openWallet(key = '', onSaved = null) {
         ${tt ? `<div class="cb2 b ${tt.c}">${tt.t}</div>` : ''}
         ${info.no ? `<button type="button" class="btn pri wide" data-pay style="margin-top:10px">Thanh toán thẻ</button>` : ''}</div>` : ''}
       <div class="fld"><label for="w-ten">Tên ví</label><input class="inp" id="w-ten" name="ten" value="${esc(w ? w.ten_vi : '')}" autocomplete="off" ${w ? '' : 'autofocus'}></div>
+      <div class="fld"><span class="lbl">Biểu tượng</span><div class="iconrow"><span class="av lg" data-iconprev aria-hidden="true">${walletIcon({ ten_vi: w ? w.ten_vi : '?', ky_hieu: icon })}</span>
+        <div class="chips">${ICONS.map((x) => `<button type="button" class="chip ic" data-ic="${x}" aria-label="Biểu tượng ${x}">${x}</button>`).join('')}</div></div>
+        <div class="grid2" style="margin-top:8px"><input class="inp" name="ictext" maxlength="4" placeholder="Gõ emoji / chữ" value="${esc(/^data:/.test(icon) ? '' : icon)}" autocomplete="off" aria-label="Biểu tượng tự gõ">
+          <label class="btn filebtn">Tải ảnh logo<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" data-icfile></label></div>
+        <div class="hint">Để trống thì dùng chữ cái đầu. Ảnh logo (ví dụ logo ngân hàng) được thu nhỏ còn 64×64.</div></div>
       <div class="fld"><span class="lbl">Nhóm</span><div class="seg" role="radiogroup">${nhoms.map((n) => `<button type="button" role="radio" data-nhom="${esc(n)}" class="${n === nhom ? 'on' : ''}" aria-checked="${n === nhom}">${esc(n)}</button>`).join('')}</div></div>
       <div class="fld"><label for="w-sd">Số dư đầu</label><input class="inp" id="w-sd" name="sd" inputmode="text" value="${w ? (w.so_du_dau < 0 ? U.MINUS : '') + num(w.so_du_dau) : '0'}" autocomplete="off">
         <div class="hint" data-sdhint>${the() ? 'Dư nợ thẻ trước giao dịch đầu tiên, nhập số âm. Ví dụ đang nợ 1.200.000 thì nhập −1.200.000.' : 'Số tiền có sẵn trong ví trước giao dịch đầu tiên.'}</div></div>
@@ -44,6 +53,8 @@ export function openWallet(key = '', onSaved = null) {
         <div class="grid2"><div class="fld"><label for="w-tt">% thanh toán tối thiểu</label><input class="inp" id="w-tt" name="tt" inputmode="decimal" value="${esc((w && w.tt_toi_thieu) || 5)}" autocomplete="off"></div>
           <div class="fld"><label for="w-vt">Ví thanh toán</label><select class="inp" id="w-vt" name="vt"><option value="">(chọn khi trả)</option>${viKhac.map((x) => `<option ${w && w.vi_thanh_toan === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div></div>
       </div>
+      <div class="fld"><label for="w-tat">Tên tắt cho bot Telegram</label><input class="inp" id="w-tat" name="tat" value="${esc(w ? w.viet_tat || '' : '')}" placeholder="ví dụ: vcb, vcbm" autocomplete="off">
+        <div class="hint" data-tathint>Bot tự hiểu tên đầy đủ (có / không dấu), vài chữ đầu và chữ cái đầu mỗi từ${w ? ` (“${esc(tat(w.ten_vi))}”)` : ''}. Thêm tên tắt riêng, cách nhau bằng dấu phẩy. Cú pháp: 20k/cafe/Cà phê/<tên tắt></div></div>
       <label class="set flat"><span>Ví mặc định khi thêm giao dịch</span><span class="switch"><input type="checkbox" name="md" ${laMacDinh ? 'checked' : ''} aria-label="Ví mặc định"><i></i></span></label>
       ${w ? `<div class="hint" style="margin:8px 0 0">${info ? '' : `Số dư tới hết tháng ${U.monthLabel(S.month)}: <b class="num">${w.bal < 0 ? U.MINUS : ''}${num(w.bal)} đ</b>. `}Đổi tên ví sẽ đổi luôn tên ví trong các giao dịch.</div>` : ''}
       <div class="okmsg" data-msg role="status"></div>
@@ -51,7 +62,17 @@ export function openWallet(key = '', onSaved = null) {
       ${w && !w.ngoai ? '<button type="button" class="btn danger del" data-del>Xóa ví</button>' : ''}
     </form>`,
     onMount: (b, close) => {
+      const prev = () => { b.querySelector('[data-iconprev]').innerHTML = walletIcon({ ten_vi: b.querySelector('[name=ten]').value || '?', ky_hieu: icon }); };
+      b.querySelector('[name=ictext]').addEventListener('input', (e) => { icon = e.target.value.trim(); prev(); });
+      b.querySelector('[name=ten]').addEventListener('input', prev);
+      b.querySelector('[data-icfile]').addEventListener('change', async (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        try { icon = await imageToPng(f, 64); b.querySelector('[name=ictext]').value = ''; prev(); } catch (er) { tagLoi(b, er.message); }
+      });
       b.addEventListener('click', async (e) => {
+        const ic = e.target.closest('[data-ic]');
+        if (ic) { icon = ic.dataset.ic; b.querySelector('[name=ictext]').value = icon; prev(); return; }
         const n = e.target.closest('[data-nhom]');
         if (n) {
           nhom = n.dataset.nhom;
@@ -78,7 +99,7 @@ export function openWallet(key = '', onSaved = null) {
         if (!ten) { tagLoi(b, 'Nhập tên ví.'); return; }
         if (ten === '__new__' || st.walletNames().some((x) => x !== (w && w.ten_vi) && x.toLowerCase() === ten.toLowerCase())) { tagLoi(b, `Đã có ví "${ten}".`); return; }
         if (sd == null) { tagLoi(b, 'Số dư đầu chưa đúng. Ví dụ: 0, 1.500.000, −1.200.000'); return; }
-        const row = { ten_vi: ten, nhom, so_du_dau: sd };
+        const row = { ten_vi: ten, nhom, so_du_dau: sd, ky_hieu: icon, viet_tat: U.nfc(g('tat')).replace(/\s*[,;]\s*/g, ', ') };
         if (the()) {
           const hm = g('hm').trim() ? U.parseMoney(g('hm')) : 0;
           if (g('hm').trim() && !hm) { tagLoi(b, 'Hạn mức chưa đúng. Ví dụ: 30tr, 30.000.000'); return; }
@@ -98,6 +119,154 @@ export function openWallet(key = '', onSaved = null) {
         if (onSaved) onSaved(ten);
       };
     }
+  });
+}
+
+// ================= ẢNH: thu nhỏ icon, tạo bộ icon cài đặt =================
+// Đọc file ảnh (PNG/JPG/SVG/WebP) thành phần tử <img>
+function loadImage(file) {
+  return new Promise((res, rej) => {
+    if (!/^image\//.test(file.type) && !/\.svg$/i.test(file.name)) { rej(new Error('Chỉ nhận file ảnh PNG, JPG, SVG hoặc WebP.')); return; }
+    if (file.size > 5 * 1024 * 1024) { rej(new Error('Ảnh lớn quá 5 MB.')); return; }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => rej(new Error('Không đọc được ảnh này.'));
+    img.src = url;
+  });
+}
+// Vẽ ảnh vào ô vuông size×size; pad = lề (0..0.5), nen = màu nền ('' = trong suốt)
+function drawSquare(img, size, pad = 0, nen = '') {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const x = cv.getContext('2d');
+  if (nen) { x.fillStyle = nen; x.fillRect(0, 0, size, size); }
+  const iw = img.naturalWidth || img.width || size, ih = img.naturalHeight || img.height || size;
+  const vung = size * (1 - 2 * pad);
+  const k = Math.min(vung / iw, vung / ih);
+  x.imageSmoothingQuality = 'high';
+  x.drawImage(img, (size - iw * k) / 2, (size - ih * k) / 2, iw * k, ih * k);
+  return cv;
+}
+// Ảnh -> PNG data URL (ô vuông), tự giảm cỡ cho vừa 1 ô Google Sheet
+export async function imageToPng(file, size) {
+  const img = await loadImage(file);
+  for (let s0 = size; s0 >= 32; s0 = Math.round(s0 * 0.75)) {
+    const u = drawSquare(img, s0).toDataURL('image/png');
+    if (u.length <= 40000) return u;
+  }
+  throw new Error('Ảnh quá chi tiết, hãy chọn ảnh đơn giản hơn.');
+}
+const toBytes = (cv) => new Promise((res) => cv.toBlob((bl) => bl.arrayBuffer().then((b) => res(new Uint8Array(b))), 'image/png'));
+const enc = (t) => new TextEncoder().encode(t);
+// Bộ icon + manifest + index.html để upload lên GitHub (đổi icon và tên khi cài app lên máy)
+async function iconPack(img, ten) {
+  const c = st.themeColors();
+  const nen = c.acc || '#C5B3D3';
+  const files = [];
+  const add = async (path, cv) => files.push({ name: 'piggy-money/' + path, data: await toBytes(cv) });
+  await add('icons/icon-192.png', drawSquare(img, 192));
+  await add('icons/icon-512.png', drawSquare(img, 512));
+  await add('icons/icon-maskable-512.png', drawSquare(img, 512, 0.14, nen));
+  await add('icons/apple-touch-icon.png', drawSquare(img, 180, 0.08, nen));
+  const png512 = drawSquare(img, 512).toDataURL('image/png');
+  files.push({ name: 'piggy-money/icons/icon.svg', data: enc(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512"><image width="512" height="512" href="${png512}" xlink:href="${png512}"/></svg>`) });
+  let man = {};
+  try { man = await (await fetch('manifest.webmanifest')).json(); } catch (e) { man = { start_url: './', scope: './', id: './', display: 'standalone', lang: 'vi', icons: [] }; }
+  man.name = ten; man.short_name = ten.length > 12 ? ten.slice(0, 12) : ten;
+  man.theme_color = nen; man.background_color = c.bg || '#FBEFEF';
+  files.push({ name: 'piggy-money/manifest.webmanifest', data: enc(JSON.stringify(man, null, 2) + '\n') });
+  try {
+    let html = await (await fetch('index.html')).text();
+    html = html.replace(/<title>[^<]*<\/title>/, `<title>${esc(ten)}</title>`)
+      .replace(/(<meta name="apple-mobile-web-app-title" content=")[^"]*(")/, `$1${esc(ten)}$2`)
+      .replace(/(<meta name="theme-color" content=")[^"]*(")/, `$1${nen}$2`);
+    files.push({ name: 'piggy-money/index.html', data: enc(html) });
+  } catch (e) { /* bỏ qua */ }
+  files.push({ name: 'HUONG-DAN.txt', data: enc(`Bộ icon + tên app "${ten}" cho Penny\r\n\r\n1) Giải nén file này.\r\n2) Mở repo piggy-money trên github.com → Add file → Upload files.\r\n3) Mở thư mục piggy-money vừa giải nén, kéo cả thư mục icons, file manifest.webmanifest và file index.html vào → Commit changes.\r\n4) Đợi 1–2 phút. Điện thoại / máy tính: gỡ app Penny đã cài rồi cài lại (icon và tên trên màn hình chính chỉ đổi khi cài lại).\r\n   iPhone: khi bấm "Thêm vào MH chính" có thể sửa tên ở bước cuối.\r\n`) });
+  return new Blob([zipStore(files)], { type: 'application/zip' });
+}
+function taiVe(blob, ten) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = ten; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+// Icon app: chọn ảnh PNG/SVG → dùng trong app (đồng bộ qua Google Sheet) + tải bộ icon cài đặt cho GitHub
+function openAppIcon() {
+  let img = null, u = '';
+  openSheet({
+    title: 'Icon app', cls: 'mid',
+    body: `<div class="iconapp"><span class="piggy xl" data-prev aria-hidden="true">${st.setting('app_icon') ? `<img src="${esc(st.setting('app_icon'))}" alt="">` : ''}</span>
+        <div class="hint" style="margin:0">Ảnh vuông, nền rõ, càng đơn giản càng đẹp. Nhận PNG, SVG, JPG, WebP (dưới 5 MB).</div></div>
+      <label class="btn wide filebtn" style="margin-top:12px">Chọn ảnh<input type="file" accept="image/png,image/svg+xml,image/jpeg,image/webp,.svg" data-file></label>
+      <div class="okmsg" data-msg role="status"></div>
+      <div class="btns"><button class="btn" data-goc>Dùng heo mặc định</button><button class="btn pri" data-save disabled>Dùng icon này</button></div>
+      <div class="lbl" style="margin-top:18px">Icon và tên khi cài app lên máy</div>
+      <div class="hint" style="margin:0 0 10px">Icon trên màn hình chính lấy từ các file trong repo GitHub, nên cần tải bộ icon này, upload lên GitHub rồi cài lại app. Bên trong có hướng dẫn 3 bước.</div>
+      <button class="btn wide" data-pack disabled>Tải bộ icon cài đặt (.zip)</button>`,
+    onMount: (b, close) => {
+      const msg = (t, okk) => { const m = b.querySelector('[data-msg]'); m.className = 'okmsg ' + (okk ? 'ok' : 'no'); m.textContent = t; };
+      b.querySelector('[data-file]').addEventListener('change', async (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        try {
+          img = await loadImage(f);
+          u = await imageToPng(f, 128);
+          b.querySelector('[data-prev]').innerHTML = `<img src="${u}" alt="">`;
+          b.querySelector('[data-save]').disabled = false; b.querySelector('[data-pack]').disabled = false;
+          msg('Đã đọc ảnh. Bấm "Dùng icon này" để áp dụng.', true);
+        } catch (er) { msg(er.message); }
+      });
+      b.addEventListener('click', async (e) => {
+        if (e.target.closest('[data-save]') && u) { await st.setSetting('app_icon', u); toast('Đã đổi icon app'); close(); }
+        if (e.target.closest('[data-goc]')) { await st.setSetting('app_icon', ''); toast('Đã dùng lại icon heo'); close(); }
+        if (e.target.closest('[data-pack]') && img) {
+          taiVe(await iconPack(img, st.appName()), 'icon-' + U.boDau(st.appName()).replace(/[^0-9a-z]+/g, '-') + '.zip');
+          msg('Đã tải bộ icon. Làm theo HUONG-DAN.txt bên trong file zip.', true);
+        }
+      });
+    }
+  });
+}
+
+// Màu giao diện: bộ màu có sẵn hoặc tự chọn từng màu (áp dụng cho chế độ sáng)
+function openColors() {
+  const cur = st.themeColors();
+  let o = { ...MAU_SAN[0], inc: '#54448C', exp: '#A5364A', ...Object.fromEntries(Object.entries(cur).filter(([, v]) => v)) };
+  const truoc = st.setting('theme_colors', '');
+  const O = [['acc', 'Header, mục đang chọn'], ['bg', 'Nền'], ['bg2', 'Dải số liệu, nền phụ'], ['line', 'Tiêu đề nhóm, đường kẻ'], ['bd', 'Viền'], ['inc', 'Số thu'], ['exp', 'Số chi / vượt']];
+  openSheet({
+    title: 'Màu giao diện', cls: 'mid',
+    body: `<div class="lbl" style="margin-top:4px">Bộ màu có sẵn</div>
+      <div class="palettes">${MAU_SAN.map((p) => `<button type="button" class="pal" data-p="${p.id}"><span class="sw">${['acc', 'bg2', 'line', 'bg'].map((k) => `<i style="background:${p[k]}"></i>`).join('')}</span>${esc(p.ten)}</button>`).join('')}</div>
+      <div class="lbl" style="margin-top:16px">Tự chọn từng màu</div>
+      <div class="cpick">${O.map(([k, t]) => `<label><input type="color" data-k="${k}" value="${o[k]}"><span>${t}</span></label>`).join('')}</div>
+      <div class="hint">Áp dụng cho giao diện sáng; giao diện tối giữ bộ màu tối. Chữ luôn giữ màu tím đậm để dễ đọc. Lưu vào Google Sheet nên các máy khác cũng đổi theo.</div>
+      <div class="btns" style="margin-top:12px"><button class="btn" data-x>Hủy</button><button class="btn pri" data-save>Lưu</button></div>`,
+    onMount: (b, close) => {
+      const xem = () => { S.set.theme_colors = JSON.stringify(o); st.applySettings(); };
+      b.addEventListener('click', async (e) => {
+        const p = e.target.closest('[data-p]');
+        if (p) {
+          const m = MAU_SAN.find((x) => x.id === p.dataset.p);
+          o = { ...o, ...m, preset: m.id };
+          if (m.id === 'penny') o = { ...o, inc: '#54448C', exp: '#A5364A' };
+          b.querySelectorAll('[data-k]').forEach((i) => { i.value = o[i.dataset.k]; });
+          xem(); return;
+        }
+        if (e.target.closest('[data-save]')) {
+          const v = o.preset === 'penny' && o.inc === '#54448C' && o.exp === '#A5364A' ? '' : JSON.stringify({ preset: o.preset || '', acc: o.acc, bg: o.bg, bg2: o.bg2, line: o.line, bd: o.bd, inc: o.inc, exp: o.exp });
+          S.set.theme_colors = truoc;
+          await st.setSetting('theme_colors', v);
+          toast('Đã lưu màu giao diện'); close('saved');
+        }
+      });
+      b.addEventListener('input', (e) => { const k = e.target.dataset.k; if (k) { o[k] = e.target.value; o.preset = ''; xem(); } });
+    },
+    // Hủy / đóng không lưu: trả lại màu cũ
+    onClose: (v) => { if (v !== 'saved') S.set.theme_colors = truoc; st.applySettings(); }
   });
 }
 
@@ -415,6 +584,15 @@ export async function manageAct(a, b, ctx) {
     case 'w-add': openWallet(); return true;
     case 'w-edit': openWallet(b.dataset.k); return true;
     case 'card-pay': openAddRef = ctx.openAdd; payCard(b.dataset.k); return true;
+    case 'due-paid': payCard(b.dataset.k); return true;
+    case 'due-later': snoozeCard(b.dataset.k); toast('Ok, mai nhắc lại'); ctx.render(); return true;
+    case 'set-appname': {
+      const v = await ask({ title: 'Tên app', label: 'Tên hiển thị trên thanh bên và tiêu đề cửa sổ', value: st.appName(), hint: 'Tên trên màn hình chính của điện thoại chỉ đổi khi cài lại app (Icon app → Tải bộ icon cài đặt).' });
+      if (v != null) { await st.setSetting('app_name', U.nfc(v) === 'Penny' ? '' : U.nfc(v)); toast('Đã đổi tên app'); }
+      return true;
+    }
+    case 'set-appicon': openAppIcon(); return true;
+    case 'set-colors': openColors(); return true;
     case 'transfer': ctx.openAdd({ loai: L.CHUYEN }); return true;
     case 'b-edit': openBudget(b.dataset.k); return true;
     case 'b-add': openBudgetAdd(); return true;

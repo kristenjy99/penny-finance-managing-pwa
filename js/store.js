@@ -1,0 +1,345 @@
+// Dữ liệu trong bộ nhớ + lưu IndexedDB + hàng đợi thay đổi + các phép tính
+import * as db from './db.js';
+import { boDau, nfc, chuanCoDau, chuanKhongDau, nowIso, uid, ym, thisMonth, sum, setNumFormat } from './util.js';
+
+// Loại giao dịch: dùng đúng chuỗi bot ghi trong Sheet
+export const L = { CHI: 'chi', THU: 'thu', CHUYEN: 'chuyển', CHO_VAY: 'cho vay', DI_VAY: 'đi vay', THU_NO: 'thu nợ', TRA_NO: 'trả nợ' };
+export const NHAN = { 'chi': 'Chi', 'thu': 'Thu', 'chuyển': 'Chuyển khoản', 'cho vay': 'Cho vay', 'đi vay': 'Đi vay', 'thu nợ': 'Thu nợ', 'trả nợ': 'Trả nợ' };
+// Chiều tiền với ví: -1 tiền ra, +1 tiền vào
+export const DAU = { 'chi': -1, 'thu': 1, 'chuyển': 0, 'cho vay': -1, 'đi vay': 1, 'thu nợ': 1, 'trả nợ': -1 };
+export const NO_TYPES = [L.CHO_VAY, L.DI_VAY, L.THU_NO, L.TRA_NO];
+export const NHOM_VI = ['Tiền mặt & ví điện tử', 'Ngân hàng', 'Thẻ tín dụng'];
+export const DM_CHUA = 'Chưa phân loại';
+export const DM_THU_KHAC = 'Thu nhập khác';
+
+export const S = {
+  tx: [], acc: [], cat: [], kw: [], bud: [], ppl: [], set: {},
+  sheetName: '', since: '', lastSync: '', pending: 0, syncing: false, syncErr: '',
+  month: thisMonth(), ready: false
+};
+
+// ---------- Sự kiện thay đổi ----------
+const subs = new Set();
+export const onChange = (fn) => { subs.add(fn); return () => subs.delete(fn); };
+let emitT = null;
+export const emit = (why = 'data') => { clearTimeout(emitT); emitT = setTimeout(() => subs.forEach((f) => f(why)), 0); };
+
+// ---------- Nạp từ IndexedDB ----------
+export async function load() {
+  const [tx, tables, meta, q] = await Promise.all([db.getAll('tx'), db.kvGet('tables'), db.kvGet('meta'), db.getAll('queue')]);
+  S.tx = (tx || []).map(normTx);
+  Object.assign(S, defaults(), tables || {});
+  Object.assign(S, meta || {});
+  S.pending = q.length;
+  applySettings();
+  S.ready = true;
+}
+function defaults() {
+  return {
+    acc: [{ ten_vi: 'Tiền mặt', nhom: 'Tiền mặt & ví điện tử', so_du_dau: 0 }],
+    cat: [{ danh_muc: DM_CHUA, nhom: 'Khác', ky_hieu: '❓', loai: 'chi' }, { danh_muc: DM_THU_KHAC, nhom: 'Thu nhập', ky_hieu: '➕', loai: 'thu' }],
+    kw: [], bud: [], ppl: [], set: {}
+  };
+}
+export const saveTables = () => db.kvSet('tables', { acc: S.acc, cat: S.cat, kw: S.kw, bud: S.bud, ppl: S.ppl, set: S.set });
+export const saveMeta = () => db.kvSet('meta', { sheetName: S.sheetName, since: S.since, lastSync: S.lastSync });
+
+export function normTx(t) {
+  return {
+    id: String(t.id || ''), ngay: String(t.ngay || '').slice(0, 10), loai: nfc(t.loai).toLowerCase(),
+    so_tien: Math.abs(Math.round(Number(t.so_tien) || 0)), ghi_chu: nfc(t.ghi_chu), danh_muc: nfc(t.danh_muc),
+    vi: nfc(t.vi), vi_den: nfc(t.vi_den), nguoi: nfc(t.nguoi), nguon: nfc(t.nguon) || 'web',
+    updated_at: String(t.updated_at || ''), da_xoa: !!t.da_xoa
+  };
+}
+
+// ---------- Cài đặt ----------
+export const setting = (k, d = '') => (S.set[k] != null && S.set[k] !== '' ? String(S.set[k]) : d);
+export const weekStart = () => (boDau(setting('week_start', 'thứ 2')).includes('chu nhat') ? 0 : 1);
+export const defaultAccount = () => setting('default_account', S.acc[0] ? S.acc[0].ten_vi : 'Tiền mặt');
+export function themeMode() {
+  const t = boDau(setting('theme', localStorage.getItem('penny_theme') || 'auto'));
+  return t.startsWith('sang') || t === 'light' ? 'light' : t.startsWith('toi') || t === 'dark' ? 'dark' : 'auto';
+}
+export function applySettings() {
+  setNumFormat(setting('number_format', '1.234.567'));
+  const mode = themeMode();
+  localStorage.setItem('penny_theme', mode);
+  const dark = mode === 'dark' || (mode === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  const meta = document.querySelector('meta[name=theme-color]');
+  if (meta) meta.content = dark ? '#5B4A72' : '#C5B3D3';
+}
+
+// ---------- Hàng đợi ----------
+async function enqueue(op) {
+  const q = await db.getAll('queue');
+  // Gộp thao tác trùng: cùng giao dịch / cùng khóa cài đặt / cùng ngân sách -> giữ bản sau
+  const same = q.filter((x) =>
+    (op.t === 'tx' && x.t === 'tx' && (x.row ? x.row.id : x.id) === (op.row ? op.row.id : op.id)) ||
+    (op.t === 'set' && x.t === 'set' && x.row.khoa === op.row.khoa) ||
+    (op.t === 'bud' && x.t === 'bud' && boDau(x.row.nhom) === boDau(op.row.nhom) && x.row.thang === op.row.thang));
+  if (same.length) await db.del('queue', same.map((x) => x.qid));
+  await db.put('queue', op);
+  S.pending = q.length - same.length + 1;
+  emit('queue');
+  window.dispatchEvent(new Event('penny-queued'));
+}
+
+// ---------- Giao dịch ----------
+export const live = () => S.tx.filter((t) => !t.da_xoa);
+export const byId = (id) => S.tx.find((t) => t.id === id);
+
+export async function saveTx(t) {
+  const x = normTx({ ...t, id: t.id || uid(), updated_at: nowIso(), nguon: t.nguon || 'web', da_xoa: false });
+  if (x.loai !== L.CHUYEN) x.vi_den = '';
+  const i = S.tx.findIndex((y) => y.id === x.id);
+  if (i >= 0) S.tx[i] = x; else S.tx.push(x);
+  if (x.nguoi && NO_TYPES.includes(x.loai) && !S.ppl.some((p) => boDau(p.ten) === boDau(x.nguoi))) {
+    S.ppl.push({ ten: x.nguoi, ghi_chu: '' });
+    await saveTables();
+    await enqueue({ t: 'ppl', op: 'put', row: { ten: x.nguoi, ghi_chu: '' } });
+  }
+  await db.put('tx', x);
+  await enqueue({ t: 'tx', op: 'put', row: x });
+  emit();
+  return x;
+}
+
+export async function saveMany(list) {
+  const out = [];
+  for (const t of list) out.push(await saveTx(t));
+  return out;
+}
+
+export async function deleteTx(id) {
+  const x = byId(id);
+  if (!x) return;
+  x.da_xoa = true; x.updated_at = nowIso();
+  await db.put('tx', x);
+  await enqueue({ t: 'tx', op: 'del', id, updated_at: x.updated_at });
+  emit();
+}
+
+// ---------- Bảng nhỏ ----------
+async function tablePut(t, arr, keyCol, row, oldKey) {
+  const k = oldKey != null ? oldKey : row[keyCol];
+  const i = arr.findIndex((r) => r[keyCol] === k);
+  if (i >= 0) arr[i] = { ...arr[i], ...row }; else arr.push(row);
+  await saveTables();
+  await enqueue({ t, op: 'put', key: k, row });
+  emit();
+}
+async function tableDel(t, arr, keyCol, key) {
+  const i = arr.findIndex((r) => r[keyCol] === key);
+  if (i >= 0) arr.splice(i, 1);
+  await saveTables();
+  await enqueue({ t, op: 'del', key });
+  emit();
+}
+// Đổi tên -> sửa luôn giao dịch trên máy (server cũng tự sửa)
+async function renameInTx(col, oldV, newV) {
+  if (!oldV || oldV === newV) return;
+  const ch = S.tx.filter((t) => t[col] === oldV);
+  ch.forEach((t) => { t[col] = newV; });
+  if (ch.length) await db.put('tx', ch);
+}
+
+export async function saveAcc(row, oldKey) {
+  row = { ten_vi: nfc(row.ten_vi), nhom: nfc(row.nhom) || NHOM_VI[0], so_du_dau: Math.round(Number(row.so_du_dau) || 0) };
+  if (oldKey && oldKey !== row.ten_vi) {
+    await renameInTx('vi', oldKey, row.ten_vi); await renameInTx('vi_den', oldKey, row.ten_vi);
+    if (setting('default_account') === oldKey) S.set.default_account = row.ten_vi;
+  }
+  await tablePut('acc', S.acc, 'ten_vi', row, oldKey);
+}
+export const deleteAcc = (key) => tableDel('acc', S.acc, 'ten_vi', key);
+
+export async function saveCat(row, oldKey) {
+  row = { danh_muc: nfc(row.danh_muc), nhom: nfc(row.nhom) || 'Khác', ky_hieu: nfc(row.ky_hieu), loai: row.loai === 'thu' ? 'thu' : 'chi' };
+  if (oldKey && oldKey !== row.danh_muc) {
+    await renameInTx('danh_muc', oldKey, row.danh_muc);
+    S.kw.forEach((k) => { if (k.danh_muc === oldKey) k.danh_muc = row.danh_muc; });
+  }
+  await tablePut('cat', S.cat, 'danh_muc', row, oldKey);
+}
+export async function deleteCat(key) {
+  S.kw = S.kw.filter((k) => k.danh_muc !== key);
+  await tableDel('cat', S.cat, 'danh_muc', key);
+}
+export async function saveKw(row, oldKey) {
+  row = { tu_khoa: nfc(row.tu_khoa).toLowerCase(), danh_muc: nfc(row.danh_muc) };
+  const k = oldKey != null ? oldKey : (S.kw.find((x) => x.tu_khoa.toLowerCase() === row.tu_khoa) || {}).tu_khoa;
+  await tablePut('kw', S.kw, 'tu_khoa', row, k);
+}
+export const deleteKw = (key) => tableDel('kw', S.kw, 'tu_khoa', key);
+export async function savePerson(row, oldKey) {
+  row = { ten: nfc(row.ten), ghi_chu: nfc(row.ghi_chu) };
+  if (oldKey && oldKey !== row.ten) await renameInTx('nguoi', oldKey, row.ten);
+  await tablePut('ppl', S.ppl, 'ten', row, oldKey);
+}
+export const deletePerson = (key) => tableDel('ppl', S.ppl, 'ten', key);
+
+// Ngân sách: khóa = nhóm + tháng
+export async function saveBudget(nhom, thang, hanMuc, nhomMoi) {
+  const i = S.bud.findIndex((b) => boDau(b.nhom) === boDau(nhom) && b.thang === thang);
+  const row = { nhom: nhomMoi || nhom, thang, han_muc: Math.round(hanMuc) };
+  if (i >= 0) S.bud[i] = row; else S.bud.push(row);
+  await saveTables();
+  await enqueue({ t: 'bud', op: 'put', row: { nhom, thang, han_muc: row.han_muc, nhom_moi: nhomMoi || '' } });
+  emit();
+}
+// Bỏ ngân sách nhóm cho tháng k: xóa dòng của tháng; nếu vẫn còn hạn mức kế thừa từ tháng trước thì đặt 0
+export async function removeBudget(nhom, thang) {
+  const i = S.bud.findIndex((b) => boDau(b.nhom) === boDau(nhom) && b.thang === thang);
+  if (i >= 0) {
+    S.bud.splice(i, 1);
+    await saveTables();
+    await enqueue({ t: 'bud', op: 'del', row: { nhom, thang } });
+  }
+  const conLai = effBudget(nhom, thang);
+  if (conLai && conLai.han_muc > 0) await saveBudget(nhom, thang, 0);
+  emit();
+}
+
+export async function setSetting(khoa, giaTri) {
+  S.set[khoa] = giaTri;
+  applySettings();
+  await saveTables();
+  await enqueue({ t: 'set', op: 'put', row: { khoa, gia_tri: giaTri } });
+  emit();
+}
+
+// ---------- Danh mục & phân loại ----------
+export const catOf = (name) => S.cat.find((c) => c.danh_muc === name) || S.cat.find((c) => boDau(c.danh_muc) === boDau(name));
+export const groupOf = (name) => { const c = catOf(name); return c ? c.nhom || 'Khác' : 'Khác'; };
+export const symbolOf = (t) => {
+  if (NO_TYPES.includes(t.loai)) return (t.nguoi || '?').charAt(0).toUpperCase();
+  if (t.loai === L.CHUYEN) return '⇄';
+  const c = catOf(t.danh_muc);
+  return (c && c.ky_hieu) || (t.danh_muc || t.ghi_chu || '?').charAt(0).toUpperCase();
+};
+export const catsFor = (loai) => S.cat.filter((c) => (loai === 'thu' ? c.loai === 'thu' : c.loai !== 'thu'));
+// Nhóm chi theo thứ tự trong Categories
+export function chiGroups() {
+  const out = [];
+  S.cat.forEach((c) => { if (c.loai !== 'thu' && !out.some((g) => boDau(g) === boDau(c.nhom))) out.push(c.nhom || 'Khác'); });
+  return out;
+}
+
+/** Tìm danh mục theo từ khóa trong đoạn chữ (giống bot): từ khóa dài nhất thắng, so có dấu rồi không dấu. */
+export function classify(text, loai) {
+  if (!String(text || '').trim()) return null;
+  const want = loai === 'thu' ? 'thu' : 'chi';
+  const cap = S.kw.map((k) => ({ tu: k.tu_khoa, dm: catOf(k.danh_muc) }))
+    .concat(S.cat.map((c) => ({ tu: c.danh_muc, dm: c })))
+    .filter((x) => x.dm && (x.dm.loai === 'thu' ? 'thu' : 'chi') === want && x.dm.danh_muc !== DM_CHUA && x.dm.danh_muc !== DM_THU_KHAC);
+  const chon = (chuan) => {
+    const c = chuan(text);
+    let best = null;
+    cap.forEach((x) => {
+      const k = chuan(x.tu);
+      if (!k.trim()) return;
+      const vt = c.indexOf(k);
+      if (vt < 0) return;
+      if (!best || k.length > best.dai || (k.length === best.dai && vt < best.vt)) best = { dai: k.length, vt, dm: x.dm };
+    });
+    return best ? best.dm.danh_muc : null;
+  };
+  return chon(chuanCoDau) || chon(chuanKhongDau);
+}
+export const fallbackCat = (loai) => (loai === 'thu' ? DM_THU_KHAC : DM_CHUA);
+
+// ---------- Phép tính ----------
+export const inMonth = (k, list = live()) => list.filter((t) => t.ngay.slice(0, 7) === k);
+export const totals = (list) => ({
+  thu: sum(list.filter((t) => t.loai === L.THU), (t) => t.so_tien),
+  chi: sum(list.filter((t) => t.loai === L.CHI), (t) => t.so_tien)
+});
+// Giá trị có dấu để hiển thị một giao dịch
+export const signedAmt = (t) => (DAU[t.loai] || 0) * t.so_tien;
+// Tổng có dấu của một ngày (thu − chi, không tính chuyển khoản/công nợ)
+export const dayNet = (list) => { const s = totals(list); return s.thu - s.chi; };
+
+/** Số dư từng ví: số dư đầu + tiền vào − tiền ra ± chuyển khoản. thu/chi = trong tháng k. */
+export function wallets(k = S.month) {
+  const map = new Map();
+  const get = (name) => {
+    if (!map.has(name)) map.set(name, { ten_vi: name, nhom: 'Khác', so_du_dau: 0, bal: 0, thu: 0, chi: 0, ngoai: true });
+    return map.get(name);
+  };
+  S.acc.forEach((a) => map.set(a.ten_vi, { ...a, bal: Number(a.so_du_dau) || 0, thu: 0, chi: 0 }));
+  live().forEach((t) => {
+    if (t.loai === L.CHUYEN) {
+      if (t.vi) get(t.vi).bal -= t.so_tien;
+      if (t.vi_den) get(t.vi_den).bal += t.so_tien;
+      return;
+    }
+    if (!t.vi) return;
+    const w = get(t.vi);
+    w.bal += (DAU[t.loai] || 0) * t.so_tien;
+    if (t.ngay.slice(0, 7) === k) {
+      if (t.loai === L.THU) w.thu += t.so_tien;
+      if (t.loai === L.CHI) w.chi += t.so_tien;
+    }
+  });
+  return [...map.values()];
+}
+
+/** Công nợ từng người: du > 0 họ nợ mình (phải thu), du < 0 mình nợ họ (phải trả). */
+export function debts() {
+  const map = new Map();
+  S.ppl.forEach((p) => map.set(boDau(p.ten), { ten: p.ten, du: 0, choVay: 0, diVay: 0, thuNo: 0, traNo: 0, hist: [] }));
+  live().filter((t) => NO_TYPES.includes(t.loai) && t.nguoi).sort((a, b) => (a.ngay < b.ngay ? -1 : a.ngay > b.ngay ? 1 : 0)).forEach((t) => {
+    const k = boDau(t.nguoi);
+    if (!map.has(k)) map.set(k, { ten: t.nguoi, du: 0, choVay: 0, diVay: 0, thuNo: 0, traNo: 0, hist: [] });
+    const p = map.get(k);
+    if (t.loai === L.CHO_VAY) { p.choVay += t.so_tien; p.du += t.so_tien; }
+    if (t.loai === L.TRA_NO) { p.traNo += t.so_tien; p.du += t.so_tien; }
+    if (t.loai === L.DI_VAY) { p.diVay += t.so_tien; p.du -= t.so_tien; }
+    if (t.loai === L.THU_NO) { p.thuNo += t.so_tien; p.du -= t.so_tien; }
+    p.hist.push(t);
+  });
+  return [...map.values()];
+}
+
+/** Tài sản, nợ, phải thu, phải trả, vốn ròng */
+export function netWorth() {
+  const ws = wallets();
+  const assets = sum(ws.filter((w) => w.bal > 0), (w) => w.bal);
+  const liab = sum(ws.filter((w) => w.bal < 0), (w) => -w.bal);
+  const ds = debts();
+  const recv = sum(ds.filter((d) => d.du > 0), (d) => d.du);
+  const pay = sum(ds.filter((d) => d.du < 0), (d) => -d.du);
+  return { assets, liab, recv, pay, net: assets + recv - liab - pay, total: assets - liab };
+}
+
+/** Hạn mức hiệu lực của nhóm cho tháng k: tháng đó, nếu chưa đặt thì tháng gần nhất trước đó (giống bot). */
+export function effBudget(nhom, k) {
+  let best = null;
+  S.bud.forEach((b) => {
+    if (boDau(b.nhom) !== boDau(nhom) || !b.thang || b.thang > k) return;
+    if (!best || b.thang > best.thang) best = b;
+  });
+  return best;
+}
+export function budgets(k = S.month) {
+  const names = [];
+  const add = (n) => { if (n && !names.some((x) => boDau(x) === boDau(n))) names.push(n); };
+  chiGroups().forEach(add);
+  S.bud.forEach((b) => add(b.nhom));
+  const spent = {};
+  inMonth(k).filter((t) => t.loai === L.CHI).forEach((t) => { const g = boDau(groupOf(t.danh_muc)); spent[g] = (spent[g] || 0) + t.so_tien; });
+  return names.map((n) => {
+    const b = effBudget(n, k);
+    const lim = b ? Number(b.han_muc) || 0 : 0;
+    const chi = spent[boDau(n)] || 0;
+    return { nhom: n, lim, chi, ratio: lim ? chi / lim : 0, inherited: b && b.thang !== k ? b.thang : '' };
+  }).filter((x) => x.lim > 0);
+}
+// Ngưỡng màu giống /tong: dưới 80% / 80–100% / trên 100%
+export const level = (r) => (r > 1 ? 'over' : r >= 0.8 ? 'mid' : '');
+
+// Ví đã biết (Accounts + tên xuất hiện trong giao dịch)
+export const walletNames = () => wallets().map((w) => w.ten_vi);
+export const personNames = () => debts().map((d) => d.ten);

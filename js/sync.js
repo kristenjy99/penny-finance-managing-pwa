@@ -120,6 +120,7 @@ async function pull(full) {
   q.filter((o) => o.t === 'set').forEach((o) => { set[o.row.khoa] = o.row.gia_tri; });
   S.set = set;
   S.sheetName = r.ten || S.sheetName;
+  if (r.version) S.apiVer = String(r.version);
   S.since = r.now;
   await saveTables();
   applySettings();

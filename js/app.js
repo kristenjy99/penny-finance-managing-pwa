@@ -1,4 +1,4 @@
-// Penny PWA v0.4.0 – khung app, điều hướng, các màn hình
+// Penny PWA v0.5.0 – khung app, điều hướng, các màn hình
 import * as U from './util.js';
 import { esc, num, MINUS } from './util.js';
 import * as st from './store.js';
@@ -7,9 +7,10 @@ import * as sy from './sync.js';
 import * as db from './db.js';
 import { ICON, piggySvg, isPC, toast, openSheet, closeAllSheets, confirmBox, pickOne, monthPick, monthPill } from './ui.js';
 import { mountTxForm } from './form.js';
+import * as SC from './screens.js';
+import { manageAct } from './manage.js';
 
 const $ = (s) => document.querySelector(s);
-const API_VER = '0.3.0';
 
 // Trạng thái giao diện
 const V = { route: 'gd', sub: 'ngay', id: '', day: '', dayMonth: '', q: '', fVi: '', fCat: '', openWeek: '', setSec: 'tt', fromList: false };
@@ -27,7 +28,7 @@ const NAV = [
   { r: 'caidat', t: 'Cài đặt', i: 'set' }
 ];
 const SUBS = [['ngay', 'Ngày'], ['lich', 'Lịch'], ['tuan', 'Tuần'], ['thang', 'Tháng'], ['tongket', 'Tổng kết']];
-const SOON = { thongke: 'Thống kê', vi: 'Ví', ngansach: 'Ngân sách', congno: 'Công nợ' };
+const TITLE = { thongke: 'Thống kê', vi: 'Ví', ngansach: 'Ngân sách', congno: 'Công nợ' };
 
 // ================= ĐIỀU HƯỚNG =================
 function parseHash() {
@@ -272,7 +273,7 @@ function renderTop() {
   const top = $('#top');
   const piggy = `<span class="piggy" aria-hidden="true">${piggySvg('var(--tile-fg)', 'var(--tile)')}</span>`;
   const addBtn = `<button class="tbtn" data-act="add">+ Thêm giao dịch</button>`;
-  let title = 'Giao dịch', right = '', tabs = '', back = '';
+  let title = 'Giao dịch', right = '', tabs = '', back = '', hero = '';
   if (V.route === 'gd' || (V.route === 'sua' && pc)) {
     if (pc) right = monthPill(S.month) + addBtn;
     else {
@@ -283,9 +284,16 @@ function renderTop() {
   } else if (V.route === 'lich') { title = 'Lịch'; right = monthPill(S.month) + addBtn; }
   else if (V.route === 'sua') { title = 'Sửa giao dịch'; back = `<button class="back" data-act="back" aria-label="Quay lại">‹</button>`; }
   else if (V.route === 'caidat') { title = 'Cài đặt'; right = pc ? '' : piggy; }
-  else { title = SOON[V.route]; right = pc ? addBtn : piggy; }
-  top.className = 'top' + (tabs ? ' has-tabs' : '');
-  top.innerHTML = `<div class="top-row"><div class="top-l">${back}<h1>${title}</h1></div><div class="top-right">${right}</div></div>${tabs}`;
+  else {
+    title = TITLE[V.route];
+    const tb = (act, t, cls = '') => `<button class="tbtn ${cls}" data-act="${act}">${t}</button>`;
+    if (V.route === 'thongke') { right = monthPill(S.month) + (pc ? addBtn : ''); if (!pc) tabs = SC.statsTabs(); }
+    else if (V.route === 'vi') { right = monthPill(S.month) + (pc ? tb('transfer', 'Chuyển khoản', 'light') + tb('w-add', '+ Thêm ví') : ''); if (!pc) hero = SC.walletHero(); }
+    else if (V.route === 'ngansach') right = monthPill(S.month) + (pc ? tb('b-add', '+ Thêm nhóm') : '');
+    else if (V.route === 'congno') right = pc ? tb('p-add', '+ Thêm người') : piggy;
+  }
+  top.className = 'top' + (tabs ? ' has-tabs' : '') + (hero ? ' has-hero' : '');
+  top.innerHTML = `<div class="top-row"><div class="top-l">${back}<h1>${title}</h1></div><div class="top-right">${right}</div></div>${tabs}${hero}`;
   document.title = title === 'Giao dịch' ? 'Penny' : title + ' · Penny';
 }
 
@@ -300,7 +308,7 @@ function renderContent() {
   const keep = ae && ae.id && c.contains(ae) && !ae.closest('.side-panel') ? { id: ae.id, s: ae.selectionStart } : null;
 
   $('#app').classList.toggle('no-nav', V.route === 'sua' && !pc);
-  $('#app').classList.toggle('no-fab', V.route === 'caidat');
+  $('#app').classList.toggle('no-fab', V.route !== 'gd');
 
   if (V.route === 'gd' || (V.route === 'sua' && pc)) {
     if (pc) {
@@ -319,8 +327,14 @@ function renderContent() {
     }
   } else if (V.route === 'caidat') {
     c.innerHTML = settingsHtml(pc);
-  } else {
-    c.innerHTML = `<div class="soon"><span class="piggy">${piggySvg('var(--tile-fg)', 'var(--tile)')}</span><b>${SOON[V.route]}</b>Có ở bản v0.5.0</div>`;
+  } else if (V.route === 'thongke') {
+    c.innerHTML = notConnected() + SC.statsHtml(pc);
+  } else if (V.route === 'vi') {
+    c.innerHTML = notConnected() + SC.walletsHtml(pc);
+  } else if (V.route === 'ngansach') {
+    c.innerHTML = notConnected() + SC.budgetsHtml(pc);
+  } else if (V.route === 'congno') {
+    c.innerHTML = notConnected() + SC.debtsHtml(pc);
   }
   if (keep) { const n = document.getElementById(keep.id); if (n) { n.focus(); try { n.setSelectionRange(keep.s, keep.s); } catch (e) { /* bỏ qua */ } } }
   if (fresh) { layoutKey = key; window.scrollTo(0, 0); }
@@ -377,7 +391,7 @@ function leaveEdit() {
 }
 
 // ================= THÊM GIAO DỊCH (popup) =================
-function openAdd() {
+function openAdd(init = null) {
   openSheet({
     title: 'Thêm giao dịch', cls: 'mid', raw: true,
     body: `<div class="utabs" role="tablist"><button role="tab" class="on" data-tab="tay" aria-selected="true">Nhập tay</button><button role="tab" data-tab="anh" aria-selected="false">Ảnh / Sao kê</button></div>
@@ -385,7 +399,7 @@ function openAdd() {
       <div class="sheet-b" data-pane="anh" hidden><div class="stub"><span class="piggy">${piggySvg('var(--tile-fg)', 'var(--tile)')}</span>
         <div><b>Có ở bản v0.6.0</b><span>Thêm giao dịch từ ảnh chụp, PDF, CSV hoặc Excel sao kê ngân hàng, đọc ngay trên máy.</span></div></div></div>`,
     onMount: (b, close) => {
-      mountTxForm(b.querySelector('[data-pane=tay]'), { variant: 'sheet', onDone: () => close() });
+      mountTxForm(b.querySelector('[data-pane=tay]'), { variant: 'sheet', init, onDone: () => close() });
       b.querySelector('.utabs').addEventListener('click', (e) => {
         const t = e.target.closest('[data-tab]');
         if (!t) return;
@@ -403,7 +417,7 @@ const installed = () => matchMedia('(display-mode: standalone)').matches || navi
 function settingsHtml(pc) {
   const set = S.set;
   const theme = st.themeMode();
-  const dim = (t, v) => `<div class="set dim" aria-disabled="true"><span>${t}<span class="tag">sắp có</span></span><span class="val">${esc(v)}</span></div>`;
+  const go2 = (act, t, v) => `<button class="set" data-act="${act}"><span>${t}</span><span class="val">${v ? esc(v) + ' ' : ''}›</span></button>`;
   const s = syncState();
   const tg = set.telegram_chat_id ? 'Đã liên kết' : 'Chưa liên kết';
   const ws = st.weekStart() === 0 ? 'Chủ Nhật' : 'Thứ Hai';
@@ -411,27 +425,28 @@ function settingsHtml(pc) {
   const sub = sy.connected() ? `${s.line} · ${S.pending} thay đổi chờ` : 'Chưa kết nối';
   const body = `${notConnected()}
     <div class="sec" id="s-tt">Thông tin</div>
-    ${dim('Tên hiển thị', set.display_name || '')}
-    ${dim('Tiền tệ', (set.currency || 'VND') + ' (₫)')}
+    ${go2('set-name', 'Tên hiển thị', set.display_name || 'Chưa đặt')}
+    <div class="set"><span>Tiền tệ</span><span class="val">${esc(set.currency || 'VND')} (đ)</span></div>
+    ${go2('set-defacc', 'Ví mặc định', st.defaultAccount())}
     <div class="set"><span>Telegram bot</span><span class="val">${tg}</span></div>
     <div class="sec" id="s-ht">Hiển thị</div>
     <div class="set tall"><span>Giao diện</span><span class="seg" role="radiogroup" aria-label="Giao diện">
       ${[['light', 'Sáng', 'sáng'], ['dark', 'Tối', 'tối'], ['auto', 'Tự động', 'tự động']].map(([k, t, v]) => `<button role="radio" aria-checked="${theme === k}" class="${theme === k ? 'on' : ''}" data-act="theme" data-v="${v}">${t}</button>`).join('')}</span></div>
-    ${dim('Định dạng số', '1.234.567 đ')}
-    ${dim('Tuần bắt đầu', ws)}
+    ${go2('set-numfmt', 'Định dạng số', num(1234567) + ' đ')}
+    ${go2('set-week', 'Tuần bắt đầu', ws)}
     <div class="sec" id="s-dm">Danh mục & từ khóa</div>
-    ${dim('Quản lý danh mục', '')}
-    ${dim('Từ khóa tự phân loại', '')}
+    ${go2('cat-mgr', 'Quản lý danh mục', '')}
+    ${go2('kw-mgr', 'Từ khóa tự phân loại', '')}
     <div class="sec" id="s-db">Đồng bộ & dữ liệu</div>
     <div class="set sheetrow"><span class="grow">Google Sheet · ${esc(S.sheetName || '—')}<span class="t2">${esc(sub)}</span>
       ${S.syncErr && sy.connected() ? `<span class="t2 exp" style="font-weight:700">${esc(S.syncErr)}</span>` : ''}</span>
       <button class="btn sm pri" data-act="sync" ${S.syncing || !sy.connected() ? 'disabled' : ''}>Đồng bộ ngay</button></div>
     <label class="set"><span>Tự động đồng bộ</span><span class="switch"><input type="checkbox" data-act="auto" ${sy.autoOn() ? 'checked' : ''} aria-label="Tự động đồng bộ"><i></i></span></label>
     <button class="set" data-act="conn"><span>Kết nối API</span><span class="val">${sy.connected() ? 'Đã kết nối' : 'Chưa kết nối'} ›</span></button>
-    ${dim('Nhập / Xuất CSV', '')}
+    ${go2('csv', 'Nhập / Xuất CSV', '')}
     <button class="set" data-act="install"><span>Cài ứng dụng lên máy</span><span class="val">${inst}</span></button>
     <button class="set danger" data-act="wipe"><span>Xóa dữ liệu trên máy</span><span class="val">›</span></button>
-    <div class="ver">Penny v${U.VERSION} · API v${API_VER}</div>`;
+    <div class="ver">Penny v${U.VERSION} · API v${esc(S.apiVer || '?')}</div>`;
   if (!pc) return body;
   const nav = [['tt', 'Thông tin'], ['ht', 'Hiển thị'], ['dm', 'Danh mục & từ khóa'], ['db', 'Đồng bộ & dữ liệu']]
     .map(([k, t]) => `<button class="${V.setSec === k ? 'on' : ''}" data-act="setsec" data-sec="${k}">${t}</button>`).join('');
@@ -475,6 +490,7 @@ function openConn() {
         try {
           const r = await sy.api('ping', {}, v.url, v.token);
           show(true, `✓ Kết nối được: Google Sheet “${r.ten}” · API v${r.version}`);
+          if (r.version) { S.apiVer = String(r.version); st.saveMeta(); }
         } catch (err) { show(false, '✗ ' + err.message); }
         e.target.disabled = false;
       };
@@ -571,7 +587,7 @@ async function onAct(b, e) {
       location.reload();
       break;
     }
-    default: break;
+    default: await manageAct(a, b, { render, openAdd, go }); break;
   }
 }
 

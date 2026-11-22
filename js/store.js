@@ -14,7 +14,7 @@ export const DM_THU_KHAC = 'Thu nhập khác';
 
 export const S = {
   tx: [], acc: [], cat: [], kw: [], bud: [], ppl: [], set: {},
-  sheetName: '', since: '', lastSync: '', pending: 0, syncing: false, syncErr: '',
+  sheetName: '', since: '', lastSync: '', apiVer: '', pending: 0, syncing: false, syncErr: '',
   month: thisMonth(), ready: false
 };
 
@@ -42,7 +42,7 @@ function defaults() {
   };
 }
 export const saveTables = () => db.kvSet('tables', { acc: S.acc, cat: S.cat, kw: S.kw, bud: S.bud, ppl: S.ppl, set: S.set });
-export const saveMeta = () => db.kvSet('meta', { sheetName: S.sheetName, since: S.since, lastSync: S.lastSync });
+export const saveMeta = () => db.kvSet('meta', { sheetName: S.sheetName, since: S.since, lastSync: S.lastSync, apiVer: S.apiVer });
 
 export function normTx(t) {
   return {
@@ -202,6 +202,46 @@ export async function removeBudget(nhom, thang) {
   emit();
 }
 
+/** Đổi tên nhóm: đổi nhóm của mọi danh mục và mọi dòng ngân sách (mọi tháng) đang dùng tên cũ */
+export async function renameGroup(oldN, newN) {
+  newN = nfc(newN);
+  if (!newN || newN === oldN) return;
+  const ops = [];
+  S.cat.filter((c) => boDau(c.nhom) === boDau(oldN)).forEach((c) => {
+    c.nhom = newN;
+    ops.push({ t: 'cat', op: 'put', key: c.danh_muc, row: { ...c } });
+  });
+  S.bud.filter((b) => boDau(b.nhom) === boDau(oldN)).forEach((b) => {
+    ops.push({ t: 'bud', op: 'put', row: { nhom: b.nhom, thang: b.thang, han_muc: b.han_muc, nhom_moi: newN } });
+    b.nhom = newN;
+  });
+  await saveTables();
+  for (const op of ops) await enqueue(op);
+  emit();
+}
+
+/** Thêm nhiều giao dịch một lần (nhập CSV): ghi máy + hàng đợi trong một lượt */
+export async function importTx(list) {
+  const now = nowIso();
+  const xs = list.map((t) => {
+    const x = normTx({ ...t, id: uid(), updated_at: now, nguon: t.nguon || 'web', da_xoa: false });
+    if (x.loai !== L.CHUYEN) x.vi_den = '';
+    return x;
+  });
+  const moi = [];
+  xs.forEach((x) => {
+    if (x.nguoi && NO_TYPES.includes(x.loai) && !S.ppl.concat(moi).some((p) => boDau(p.ten) === boDau(x.nguoi))) moi.push({ ten: x.nguoi, ghi_chu: '' });
+  });
+  S.tx.push(...xs);
+  if (moi.length) { S.ppl.push(...moi); await saveTables(); }
+  await db.put('tx', xs);
+  await db.put('queue', moi.map((p) => ({ t: 'ppl', op: 'put', row: p })).concat(xs.map((x) => ({ t: 'tx', op: 'put', row: x }))));
+  S.pending = (await db.getAll('queue')).length;
+  emit('queue'); emit();
+  window.dispatchEvent(new Event('penny-queued'));
+  return xs;
+}
+
 export async function setSetting(khoa, giaTri) {
   S.set[khoa] = giaTri;
   applySettings();
@@ -261,8 +301,15 @@ export const signedAmt = (t) => (DAU[t.loai] || 0) * t.so_tien;
 // Tổng có dấu của một ngày (thu − chi, không tính chuyển khoản/công nợ)
 export const dayNet = (list) => { const s = totals(list); return s.thu - s.chi; };
 
-/** Số dư từng ví: số dư đầu + tiền vào − tiền ra ± chuyển khoản. thu/chi = trong tháng k. */
+// Ngày cuối (dạng chuỗi so sánh được) của tháng k; '' = không giới hạn
+const endOf = (k) => (k ? k + '-31' : '9999-12-31');
+
+/**
+ * Số dư từng ví tính tới hết tháng k: số dư đầu + mọi dòng tiền theo chiều tiền với ví (gồm chuyển khoản, công nợ).
+ * thu / chi = tiền vào / ra ví đó trong tháng k (gồm chuyển khoản, công nợ).
+ */
 export function wallets(k = S.month) {
+  const end = endOf(k);
   const map = new Map();
   const get = (name) => {
     if (!map.has(name)) map.set(name, { ten_vi: name, nhom: 'Khác', so_du_dau: 0, bal: 0, thu: 0, chi: 0, ngoai: true });
@@ -270,30 +317,35 @@ export function wallets(k = S.month) {
   };
   S.acc.forEach((a) => map.set(a.ten_vi, { ...a, bal: Number(a.so_du_dau) || 0, thu: 0, chi: 0 }));
   live().forEach((t) => {
+    if (t.ngay > end) return;
+    const trongThang = t.ngay.slice(0, 7) === k;
     if (t.loai === L.CHUYEN) {
-      if (t.vi) get(t.vi).bal -= t.so_tien;
-      if (t.vi_den) get(t.vi_den).bal += t.so_tien;
+      if (t.vi) { const w = get(t.vi); w.bal -= t.so_tien; if (trongThang) w.chi += t.so_tien; }
+      if (t.vi_den) { const w = get(t.vi_den); w.bal += t.so_tien; if (trongThang) w.thu += t.so_tien; }
       return;
     }
     if (!t.vi) return;
     const w = get(t.vi);
-    w.bal += (DAU[t.loai] || 0) * t.so_tien;
-    if (t.ngay.slice(0, 7) === k) {
-      if (t.loai === L.THU) w.thu += t.so_tien;
-      if (t.loai === L.CHI) w.chi += t.so_tien;
-    }
+    const d = DAU[t.loai] || 0;
+    w.bal += d * t.so_tien;
+    if (trongThang) { if (d > 0) w.thu += t.so_tien; else if (d < 0) w.chi += t.so_tien; }
   });
   return [...map.values()];
 }
 
-/** Công nợ từng người: du > 0 họ nợ mình (phải thu), du < 0 mình nợ họ (phải trả). */
-export function debts() {
+/**
+ * Công nợ từng người (tới hết tháng k, bỏ trống k = mọi thời điểm).
+ * du = cho vay + trả nợ − đi vay − thu nợ: du > 0 họ nợ mình (phải thu), du < 0 mình nợ họ (phải trả).
+ */
+export function debts(k = '') {
+  const end = endOf(k);
   const map = new Map();
-  S.ppl.forEach((p) => map.set(boDau(p.ten), { ten: p.ten, du: 0, choVay: 0, diVay: 0, thuNo: 0, traNo: 0, hist: [] }));
-  live().filter((t) => NO_TYPES.includes(t.loai) && t.nguoi).sort((a, b) => (a.ngay < b.ngay ? -1 : a.ngay > b.ngay ? 1 : 0)).forEach((t) => {
-    const k = boDau(t.nguoi);
-    if (!map.has(k)) map.set(k, { ten: t.nguoi, du: 0, choVay: 0, diVay: 0, thuNo: 0, traNo: 0, hist: [] });
-    const p = map.get(k);
+  const mk = (ten) => ({ ten, du: 0, choVay: 0, diVay: 0, thuNo: 0, traNo: 0, hist: [] });
+  S.ppl.forEach((p) => { if (!map.has(boDau(p.ten))) map.set(boDau(p.ten), mk(p.ten)); });
+  live().filter((t) => NO_TYPES.includes(t.loai) && t.nguoi && t.ngay <= end).sort((a, b) => (a.ngay < b.ngay ? -1 : a.ngay > b.ngay ? 1 : 0)).forEach((t) => {
+    const k2 = boDau(t.nguoi);
+    if (!map.has(k2)) map.set(k2, mk(t.nguoi));
+    const p = map.get(k2);
     if (t.loai === L.CHO_VAY) { p.choVay += t.so_tien; p.du += t.so_tien; }
     if (t.loai === L.TRA_NO) { p.traNo += t.so_tien; p.du += t.so_tien; }
     if (t.loai === L.DI_VAY) { p.diVay += t.so_tien; p.du -= t.so_tien; }
@@ -302,13 +354,15 @@ export function debts() {
   });
   return [...map.values()];
 }
+// Ảnh hưởng của một giao dịch công nợ lên số dư người đó (+ làm họ nợ mình nhiều hơn)
+export const debtSign = (loai) => (loai === L.CHO_VAY || loai === L.TRA_NO ? 1 : -1);
 
-/** Tài sản, nợ, phải thu, phải trả, vốn ròng */
-export function netWorth() {
-  const ws = wallets();
+/** Tài sản, nợ, phải thu, phải trả, vốn ròng tính tới hết tháng k */
+export function netWorth(k = S.month) {
+  const ws = wallets(k);
   const assets = sum(ws.filter((w) => w.bal > 0), (w) => w.bal);
   const liab = sum(ws.filter((w) => w.bal < 0), (w) => -w.bal);
-  const ds = debts();
+  const ds = debts(k);
   const recv = sum(ds.filter((d) => d.du > 0), (d) => d.du);
   const pay = sum(ds.filter((d) => d.du < 0), (d) => -d.du);
   return { assets, liab, recv, pay, net: assets + recv - liab - pay, total: assets - liab };
@@ -341,5 +395,5 @@ export function budgets(k = S.month) {
 export const level = (r) => (r > 1 ? 'over' : r >= 0.8 ? 'mid' : '');
 
 // Ví đã biết (Accounts + tên xuất hiện trong giao dịch)
-export const walletNames = () => wallets().map((w) => w.ten_vi);
+export const walletNames = () => wallets('').map((w) => w.ten_vi);
 export const personNames = () => debts().map((d) => d.ten);

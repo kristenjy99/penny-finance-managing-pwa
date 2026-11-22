@@ -1,6 +1,6 @@
 // Tiện ích chung: định dạng tiền, ngày, chữ không dấu
 
-export const VERSION = '0.4.0';
+export const VERSION = '0.5.0';
 
 // ---------- Chữ ----------
 export const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -90,6 +90,14 @@ export function parseDate(s, namMacDinh) {
   m = s.match(/^(\d{1,2})\/(\d{1,2})(?!\d)/);
   if (m) return okDate(namMacDinh || new Date().getFullYear(), +m[2], +m[1]);
   return null;
+}
+// Số tiền có thể âm hoặc bằng 0 (số dư đầu của ví): "-1.200.000", "−1tr2", "0" -> số nguyên, sai -> null
+export function parseSignedMoney(s) {
+  s = String(s == null ? '' : s).trim();
+  if (/^[+\-−]?\s*0+\s*(đ|₫)?$/i.test(s) || s === '') return 0;
+  const am = /^[\-−]/.test(s);
+  const v = parseMoney(s.replace(/^[+\-−]\s*/, ''));
+  return v == null ? null : am ? -v : v;
 }
 export function okDate(y, m, d) {
   if (y < 2000 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return null;

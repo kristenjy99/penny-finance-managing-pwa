@@ -403,22 +403,34 @@ function leaveEdit() {
 }
 
 // ================= THÊM GIAO DỊCH (popup) =================
-function openAdd(init = null) {
+function openAdd(init = null, tab = '') {
+  // Mobile luôn mở Nhập tay. PC: nhớ tab dùng lần trước (mặc định Nhập tay) vì nhập tay đã có sẵn ở panel phải;
+  // tab Ảnh / Sao kê mở hộp thoại rộng 880px như hình PC 8
+  let nho = ''; try { nho = localStorage.getItem('penny_tab_them') || ''; } catch (e) { /* bỏ qua */ }
+  const dau = tab || (isPC() && !init && nho === 'anh' ? 'anh' : 'tay');
+  let scan = null;
   openSheet({
     title: 'Thêm giao dịch', cls: 'mid', raw: true,
-    body: `<div class="utabs" role="tablist"><button role="tab" class="on" data-tab="tay" aria-selected="true">Nhập tay</button><button role="tab" data-tab="anh" aria-selected="false">Ảnh / Sao kê</button></div>
-      <div class="sheet-b" data-pane="tay"></div>
-      <div class="sheet-b" data-pane="anh" hidden><div class="stub"><span class="piggy">${brandMark()}</span>
-        <div><b>Có ở bản v0.6.0</b><span>Thêm giao dịch từ ảnh chụp, PDF, CSV hoặc Excel sao kê ngân hàng, đọc ngay trên máy.</span></div></div></div>`,
-    onMount: (b, close) => {
+    body: `<div class="utabs" role="tablist">${[['tay', 'Nhập tay'], ['anh', 'Ảnh / Sao kê']].map(([k, t]) => `<button role="tab" class="${k === dau ? 'on' : ''}" data-tab="${k}" aria-selected="${k === dau}">${t}</button>`).join('')}</div>
+      <div class="sheet-b" data-pane="tay"${dau === 'tay' ? '' : ' hidden'}></div>
+      <div class="sheet-b sc-pane" data-pane="anh"${dau === 'anh' ? '' : ' hidden'}></div>`,
+    onMount: (b, close, sh) => {
       mountTxForm(b.querySelector('[data-pane=tay]'), { variant: 'sheet', init, onDone: () => close() });
-      b.querySelector('.utabs').addEventListener('click', (e) => {
-        const t = e.target.closest('[data-tab]');
-        if (!t) return;
-        b.querySelectorAll('[data-tab]').forEach((x) => { x.classList.toggle('on', x === t); x.setAttribute('aria-selected', x === t); });
-        b.querySelectorAll('[data-pane]').forEach((p) => { p.hidden = p.dataset.pane !== t.dataset.tab; });
-      });
-    }
+      const chon = async (k) => {
+        b.querySelectorAll('[data-tab]').forEach((x) => { x.classList.toggle('on', x.dataset.tab === k); x.setAttribute('aria-selected', x.dataset.tab === k); });
+        b.querySelectorAll('[data-pane]').forEach((p) => { p.hidden = p.dataset.pane !== k; });
+        sh.classList.toggle('mid', k !== 'anh');
+        if (isPC()) try { localStorage.setItem('penny_tab_them', k); } catch (e) { /* bỏ qua */ }
+        if (k === 'anh' && !scan) {
+          scan = 1;
+          const m = await import('./scan.js');
+          scan = m.mountScan(b.querySelector('[data-pane=anh]'), { onDone: () => close() });
+        }
+      };
+      b.querySelector('.utabs').addEventListener('click', (e) => { const t = e.target.closest('[data-tab]'); if (t) chon(t.dataset.tab); });
+      if (dau === 'anh') chon('anh');
+    },
+    onClose: () => { if (scan && scan.dispose) scan.dispose(); }
   });
 }
 

@@ -1,11 +1,13 @@
 // Service worker của Penny: cache khung app để mở được khi mất mạng.
 // MỖI LẦN PHÁT HÀNH: đổi VERSION để máy người dùng tải bản mới.
-const VERSION = 'penny-v0.5.2';
+const VERSION = 'penny-v0.6.0';
+const LIB_CACHE = 'penny-lib'; // thư viện đọc ảnh/PDF (lib/): cache khi dùng lần đầu, giữ qua các phiên bản
 const FONT_CACHE = 'penny-fonts';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/util.js', 'js/db.js', 'js/store.js', 'js/sync.js', 'js/ui.js', 'js/form.js',
   'js/screens.js', 'js/manage.js', 'js/csv.js', 'js/xlsx.js', 'js/pick.js',
+  'js/scan.js', 'js/stmt.js', 'js/docread.js', 'js/xlsxread.js', 'js/unzip.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'
 ];
 
@@ -15,7 +17,7 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys()
-    .then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== FONT_CACHE).map((k) => caches.delete(k))))
+    .then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== FONT_CACHE && k !== LIB_CACHE).map((k) => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
@@ -36,6 +38,18 @@ self.addEventListener('fetch', (e) => {
 
   // Chỉ xử lý file của app (cùng nguồn). Không chặn script.google.com hay API khác.
   if (url.origin !== self.location.origin) return;
+
+  // Thư viện lib/ (Tesseract, pdf.js, dữ liệu ngôn ngữ): lấy cache trước, chưa có thì tải rồi cất (không nằm trong SHELL)
+  if (url.pathname.includes('/lib/')) {
+    e.respondWith(caches.open(LIB_CACHE).then(async (c) => {
+      const hit = await c.match(req, { ignoreSearch: true });
+      if (hit) return hit;
+      const r = await fetch(req);
+      if (r.ok) c.put(req, r.clone());
+      return r;
+    }));
+    return;
+  }
 
   // Mở trang: trả index.html từ cache (bỏ phần #...), mạng chỉ dùng khi chưa có cache
   if (req.mode === 'navigate') {

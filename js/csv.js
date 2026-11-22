@@ -85,7 +85,7 @@ export function readCsv(text) {
     const ngay = U.parseDate(g('ngay'), namNay);
     const loai = LOAI_TU[U.boDau(g('loai'))];
     const so = U.parseMoney(g('so_tien'));
-    const t = { ngay, loai, so_tien: so, ghi_chu: g('ghi_chu'), danh_muc: g('danh_muc'), vi: g('vi'), vi_den: g('vi_den'), nguoi: g('nguoi'), nguon: U.boDau(g('nguon')) === 'bot' ? 'bot' : 'web' };
+    const t = { ngay, loai, so_tien: so, ghi_chu: g('ghi_chu'), danh_muc: g('danh_muc'), vi: g('vi'), vi_den: g('vi_den'), nguoi: g('nguoi'), nguon: { bot: 'bot', 'sao ke': 'sao kê' }[U.boDau(g('nguon'))] || 'web' };
     let msg = '';
     if (!ngay) msg = `Ngày "${g('ngay')}" chưa đúng (cần dd/mm/yyyy)`;
     else if (!loai) msg = `Loại "${g('loai')}" không hợp lệ`;

@@ -1,4 +1,5 @@
 // Penny v0.5.2 – các màn Thống kê, Ví, Ngân sách, Công nợ (mobile + PC)
+import { isMoi } from './skin.js';
 import * as U from './util.js';
 import { esc, num, MINUS } from './util.js';
 import * as st from './store.js';
@@ -211,7 +212,7 @@ export function barsSvg(bk, nhan) {
     const xl = !nhieu || i % buoc === 0 || i === n - 1 ? `<text x="50%" y="${TOP + H + 22}" text-anchor="middle" class="bx">${x.lb}</text>` : '';
     return `<svg x="${(i * w).toFixed(4)}%" width="${w.toFixed(4)}%" height="${TOP + H + 34}" overflow="visible">
       <title>${x.t}: ${num(v)} đ</title>
-      ${bh ? `<rect x="${nhieu ? 20 : 30}%" width="${nhieu ? 60 : 40}%" y="${y}" height="${bh}" fill="var(--acc)"/>` : ''}${lbv}${xl}</svg>`;
+      ${bh ? `<rect x="${nhieu ? 20 : 30}%" width="${nhieu ? 60 : 40}%" y="${y}" height="${bh}" fill="var(--bar, var(--acc))"/>` : ''}${lbv}${xl}</svg>`;
   }).join('');
   return `<svg class="dbars" width="100%" height="${TOP + H + 34}" role="img" aria-label="${esc(nhan)}">${h}
     <line x1="0" x2="100%" y1="${TOP + H + 33.5}" y2="${TOP + H + 33.5}" stroke="var(--bd)"/></svg>`;
@@ -249,17 +250,18 @@ export function statsHtml(pc) {
     const canMo = !parts.byCat && p.cats.length;
     return `<${canMo ? 'button' : 'div'} class="leg" ${canMo ? `data-act="st-grp" data-k="${esc(p.k)}" aria-expanded="${!!mo}"` : ''}><i style="background:${p.mau}"></i><span class="k">${esc(p.k)}</span><span class="num">${num(p.v)} · ${p.pct}%</span>${canMo ? `<span class="chev" aria-hidden="true">${mo ? '▾' : '▸'}</span>` : ''}</${canMo ? 'button' : 'div'}>${sub}`;
   }).join('') : `<div class="empty">Chưa có khoản ${loai === L.CHI ? 'chi' : 'thu'} trong khoảng này.</div>`;
-  const head = parts.length ? `<div class="sec"><span>${loai === L.CHI ? 'Chi' : 'Thu'} theo ${parts.byCat ? 'danh mục' : 'nhóm'}</span><span class="r num">${num(total)} đ · ${nGd} GD</span></div>` : '';
+  const head = parts.length ? `<div class="sec dh"><span>${loai === L.CHI ? 'Chi' : 'Thu'} theo ${parts.byCat ? 'danh mục' : 'nhóm'}</span><span class="r num">${num(total)} đ · ${nGd} GD</span></div>` : '';
   const alert = loai === L.CHI && SV.per === 'thang' ? budgetAlert() : '';
   const tenBars = (loai === L.CHI ? 'Chi' : 'Thu') + ' theo ' + (SV.per === 'quy' ? 'tuần' : SV.per === 'nam' ? 'tháng' : 'ngày');
   const bars = barsSvg(buckets(loai, r), tenBars);
-  const left = `<div class="donut-wrap">${donutSvg(parts, nhan, total)}</div>${head}${legend}${alert}`;
+  const moi = isMoi();
+  const left = `<div class="donut-wrap">${donutSvg(parts, nhan, total)}</div>${head}${legend}${moi ? '' : alert}`;
   const s0 = st.totals(list);
   const band = bandOf([{ lb: 'Thu', vl: plus(s0.thu), c: 'inc' }, { lb: 'Chi', vl: minus(s0.chi), c: 'exp' }, { lb: 'Tổng', vl: net(s0.thu - s0.chi) }]);
-  if (!pc) return perBar() + band + left + `<div class="sec"><span>${tenBars} <small class="unit">nghìn đ</small></span></div><div class="mbars">${bars}</div>`;
+  if (!pc) return perBar() + band + left + `<div class="sec st"><span>${tenBars} <small class="unit">nghìn đ</small></span></div><div class="mbars">${bars}</div>${moi ? alert : ''}`;
   const tabs = `<div class="utabs st-tabs" role="tablist">${[['chi', 'Chi tiêu'], ['thu', 'Thu nhập']].map(([k, t]) => `<button role="tab" class="${SV.stTab === k ? 'on' : ''}" aria-selected="${SV.stTab === k}" data-act="st-tab" data-v="${k}">${t}</button>`).join('')}</div>`;
   return band + perBar() + `<div class="st-grid"><div class="st-l">${tabs}${left}</div>
-    <div class="st-r"><h2>${tenBars} <small>nghìn đ</small></h2>${bars}</div></div>`;
+    <div class="st-r"><h2>${tenBars} <small>nghìn đ</small></h2>${bars}${moi ? alert : ''}</div></div>`;
 }
 export const statsTabs = () => `<div class="utabs" role="tablist">${[['chi', 'Chi tiêu'], ['thu', 'Thu nhập']].map(([k, t]) => `<button role="tab" class="${SV.stTab === k ? 'on' : ''}" aria-selected="${SV.stTab === k}" data-act="st-tab" data-v="${k}">${t}</button>`).join('')}</div>`;
 
@@ -338,8 +340,11 @@ export function walletsHtml(pc) {
 export const budStatus = (x) => (x.chi > x.lim ? 'Vượt ' + num(x.chi - x.lim) : x.chi === x.lim ? 'Đạt hạn mức' : 'Còn ' + num(x.lim - x.chi));
 const theoThang = (x) => (x.inherited ? ` · theo tháng ${U.monthLabel(x.inherited)}` : '');
 
-export function budgetsHtml(pc) {
-  const b = st.budgets(S.month);
+export function budgetsHtml(pc, moi = false) {
+  let b = st.budgets(S.month);
+  // Mẫu mới: nhóm đã đạt / vượt hạn mức một thẻ, nhóm còn trong hạn mức một thẻ
+  if (moi && !pc) { b = b.filter((x) => x.ratio >= 1).concat(b.filter((x) => x.ratio < 1)); }
+  const cat = moi && !pc ? b.findIndex((x) => x.ratio < 1) : -1;
   const lim = U.sum(b, (x) => x.lim), chi = U.sum(b, (x) => x.chi), con = lim - chi;
   const pct = (x) => Math.round(x.ratio * 100);
   const items = [{ lb: 'Ngân sách', vl: num(lim) }, { lb: 'Đã chi', vl: num(chi), c: chi ? 'exp' : '' }, { lb: 'Còn lại', vl: net(con), c: con < 0 ? 'exp' : '' }];
@@ -348,7 +353,7 @@ export function budgetsHtml(pc) {
   const empty = `<div class="empty">Chưa đặt ngân sách cho tháng ${U.monthLabel(S.month)}.<br>Bấm "+ Thêm nhóm" để đặt hạn mức theo nhóm danh mục.</div>`;
   if (!pc) {
     return bandOf(items) + `<div class="sec"><span>Theo nhóm</span>${b.length ? '<button class="secbtn" data-act="b-bulk">Sửa</button>' : ''}</div>`
-      + (b.length ? b.map((x) => `<button class="brow" data-act="b-edit" data-k="${esc(x.nhom)}">
+      + (b.length ? b.map((x, i) => `${i && i === cat ? '<div class="cbrk"></div>' : ''}<button class="brow" data-act="b-edit" data-k="${esc(x.nhom)}">
         <span class="l1"><span>${esc(x.nhom)}</span><span class="${x.ratio > 1 ? 'exp' : ''}">${pct(x)}%</span></span>
         <span class="l2">${num(x.chi)} / ${num(x.lim)} · ${budStatus(x)}${theoThang(x)}</span>${bar(x)}</button>`).join('') : empty)
       + `<div class="pad"><button class="btn wide" data-act="b-add">+ Thêm nhóm ngân sách</button></div>`;
@@ -396,7 +401,7 @@ export function debtsHtml(pc) {
       : p.du < 0 ? `<button class="btn" data-act="debt-add" data-loai="trả nợ">Trả ${esc(p.ten)}</button>` : '';
     hist = `<div class="sec"><span>Lịch sử · ${esc(p.ten)}</span><button class="secbtn" data-act="p-edit" data-k="${esc(p.ten)}">Sửa</button></div>`
       + (rows || '<div class="empty">Chưa có giao dịch với người này.</div>')
-      + `<div class="remain"><span>Còn lại</span><span class="num">${net(p.du)}</span></div>`
+      + `<div class="remain" data-say="${esc(p.du > 0 ? `${p.ten} còn nợ bạn ${num(p.du)} nè` : p.du < 0 ? `Bạn còn nợ ${p.ten} ${num(-p.du)}` : `Đã xong nợ với ${p.ten}`)}"><span>Còn lại</span><span class="num">${net(p.du)}</span></div>`
       + `<div class="btns pad dbtns"><button class="btn" data-act="debt-add" data-loai="cho vay">+ Cho vay</button>${tra}<button class="btn" data-act="debt-add" data-loai="đi vay">+ Đi vay</button></div>`;
   } else {
     hist = `<div class="btns pad dbtns"><button class="btn" data-act="debt-add" data-loai="cho vay">+ Cho vay</button><button class="btn" data-act="debt-add" data-loai="đi vay">+ Đi vay</button></div>`;

@@ -1,4 +1,5 @@
 // Penny v0.5.0 – hộp thoại quản lý: ví, ngân sách, người, danh mục, từ khóa, các mục Cài đặt
+import { isMoi, MOI } from './skin.js';
 import * as U from './util.js';
 import { esc, num } from './util.js';
 import * as st from './store.js';
@@ -240,10 +241,10 @@ function openColors() {
   openSheet({
     title: 'Màu giao diện', cls: 'mid',
     body: `<div class="lbl" style="margin-top:4px">Bộ màu có sẵn</div>
-      <div class="palettes">${MAU_SAN.map((p) => `<button type="button" class="pal" data-p="${p.id}"><span class="sw">${['acc', 'bg2', 'line', 'bg'].map((k) => `<i style="background:${p[k]}"></i>`).join('')}</span>${esc(p.ten)}</button>`).join('')}</div>
+      <div class="palettes">${MAU_SAN.map((p) => `<button type="button" class="pal" data-p="${p.id}"><span class="sw">${(isMoi() ? ['pri', 'hdr', 'tile', 'bg'].map((k) => MOI[p.id][k]) : ['acc', 'bg2', 'line', 'bg'].map((k) => p[k])).map((v) => `<i style="background:${v}"></i>`).join('')}</span>${esc(p.ten)}</button>`).join('')}</div>
       <div class="lbl" style="margin-top:16px">Tự chọn từng màu</div>
       <div class="cpick">${O.map(([k, t]) => `<label><input type="color" data-k="${k}" value="${o[k]}"><span>${t}</span></label>`).join('')}</div>
-      <div class="hint">Áp dụng cho giao diện sáng; giao diện tối giữ bộ màu tối. Chữ luôn giữ màu tím đậm để dễ đọc. Lưu vào Google Sheet nên các máy khác cũng đổi theo.</div>
+      <div class="hint">${isMoi() ? 'Mẫu thiết kế mới: bộ màu có sẵn dùng đúng màu của mẫu (header, nút, nền); khi tự chọn, màu nút được suy ra từ màu header. ' : ''}Áp dụng cho giao diện sáng; giao diện tối giữ bộ màu tối. Chữ luôn giữ màu tím đậm để dễ đọc. Lưu vào Google Sheet nên các máy khác cũng đổi theo.</div>
       <div class="btns" style="margin-top:12px"><button class="btn" data-x>Hủy</button><button class="btn pri" data-save>Lưu</button></div>`,
     onMount: (b, close) => {
       const xem = () => { S.set.theme_colors = JSON.stringify(o); st.applySettings(); };

@@ -9,6 +9,7 @@ import { ICON, brandMark, isPC, toast, openSheet, closeAllSheets, confirmBox, pi
 import { mountTxForm } from './form.js';
 import * as SC from './screens.js';
 import { manageAct } from './manage.js';
+import { isMoi, applySkin, setSkin, skinContent } from './skin.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -105,7 +106,7 @@ function rowHtml(t, pc = isPC()) {
     <span class="mid"><span class="t1" style="display:block">${esc(t1)}</span><span class="t2" style="display:block">${esc(t2)}</span></span>
     <span class="amt num ${c}">${amt}</span></button>`;
 }
-const dayHead = (d, list) => `<div class="sec"><span>${U.dayLabel(d)}</span><span class="r num">${netSigned(st.dayNet(list))} đ</span></div>`;
+const dayHead = (d, list) => `<div class="sec dh"><span>${U.dayLabel(d)}</span><span class="r num">${netSigned(st.dayNet(list))} đ</span></div>`;
 
 // Danh sách nhóm theo ngày
 function dayGroups(list) {
@@ -121,7 +122,7 @@ function dayGroups(list) {
 function budgetBlock() {
   const b = st.budgets(S.month);
   if (!b.length) return '';
-  return `<div class="sec"><span>Ngân sách</span></div>` + b.map((x) => {
+  return `<div class="sec st"><span>Ngân sách</span></div>` + b.map((x) => {
     const pct = Math.round(x.ratio * 100);
     return `<div class="bud"><div class="h">${esc(x.nhom)} · ${num(x.chi)} / ${num(x.lim)} · <span class="${x.ratio > 1 ? 'exp' : ''}">${pct}%</span></div>
       <div class="bar ${st.level(x.ratio)}" role="progressbar" aria-valuenow="${pct}" aria-label="${esc(x.nhom)}"><i style="width:${Math.min(100, pct)}%"></i></div></div>`;
@@ -168,7 +169,7 @@ function calendar(pc) {
   return `<div class="cal">${h}</div>`;
 }
 // Tiêu đề ngày ở Lịch: tổng thu và tổng chi riêng
-const calHead = (d, list) => { const s0 = st.totals(list); return `<div class="sec"><span>${U.dayLabel(d)}</span><span class="r num"><span class="inc">${plus(s0.thu)}</span> · <span class="exp">${minus(s0.chi)}</span></span></div>`; };
+const calHead = (d, list) => { const s0 = st.totals(list); return `<div class="sec dh"><span>${U.dayLabel(d)}</span><span class="r num"><span class="inc">${plus(s0.thu)}</span> · <span class="exp">${minus(s0.chi)}</span></span></div>`; };
 function dayDetail() {
   const d = selDay();
   const list = st.live().filter((t) => t.ngay === d);
@@ -281,7 +282,7 @@ function syncState() {
 }
 
 function renderTop() {
-  const pc = isPC();
+  const pc = isPC(), moi = isMoi();
   const top = $('#top');
   const piggy = `<span class="piggy" aria-hidden="true">${brandMark()}</span>`;
   const addBtn = `<button class="tbtn" data-act="add">+ Thêm giao dịch</button>`;
@@ -295,14 +296,14 @@ function renderTop() {
     }
   } else if (V.route === 'lich') { title = 'Lịch'; right = monthPill(S.month) + addBtn; }
   else if (V.route === 'sua') { title = 'Sửa giao dịch'; back = `<button class="back" data-act="back" aria-label="Quay lại">‹</button>`; }
-  else if (V.route === 'caidat') { title = 'Cài đặt'; right = pc ? '' : piggy; }
+  else if (V.route === 'caidat') { title = 'Cài đặt'; right = pc && !moi ? '' : piggy; }
   else {
     title = TITLE[V.route];
     const tb = (act, t, cls = '') => `<button class="tbtn ${cls}" data-act="${act}">${t}</button>`;
-    if (V.route === 'thongke') { right = pc ? addBtn : piggy; if (!pc) tabs = SC.statsTabs(); }
-    else if (V.route === 'vi') { right = monthPill(S.month) + (pc ? tb('transfer', 'Chuyển khoản', 'light') + tb('w-add', '+ Thêm ví') : ''); if (!pc) hero = SC.walletHero(); }
-    else if (V.route === 'ngansach') right = monthPill(S.month) + (pc ? tb('b-add', '+ Thêm nhóm') : '');
-    else if (V.route === 'congno') right = pc ? tb('p-add', '+ Thêm người') : piggy;
+    if (V.route === 'thongke') { right = moi ? monthPill(S.month) : pc ? addBtn : piggy; if (!pc || moi) tabs = SC.statsTabs(); }
+    else if (V.route === 'vi') { right = monthPill(S.month) + (pc && !moi ? tb('transfer', 'Chuyển khoản', 'light') + tb('w-add', '+ Thêm ví') : ''); if (!pc || moi) hero = SC.walletHero(); }
+    else if (V.route === 'ngansach') right = monthPill(S.month) + (pc && !moi ? tb('b-add', '+ Thêm nhóm') : '');
+    else if (V.route === 'congno') right = pc && !moi ? tb('p-add', '+ Thêm người') : piggy;
   }
   top.className = 'top' + (tabs ? ' has-tabs' : '') + (hero ? ' has-hero' : '');
   top.innerHTML = `<div class="top-row"><div class="top-l">${back}<h1>${title}</h1></div><div class="top-right">${right}</div></div>${tabs}${hero}`;
@@ -311,9 +312,12 @@ function renderTop() {
 
 // ================= NỘI DUNG =================
 function renderContent() {
-  const pc = isPC();
+  const pc = isPC(), moi = isMoi();
+  const pcL = pc && !moi; // PC bố cục bảng (mẫu cũ); mẫu mới dùng thẻ như mobile cho Ví, Ngân sách, Công nợ, Cài đặt
   const c = $('#content');
-  const key = [V.route, V.sub, pc ? 'pc' : 'm', V.route === 'sua' && !pc ? V.id : ''].join('|');
+  c.classList.toggle('cgrid', pc && moi && ['vi', 'ngansach', 'caidat'].includes(V.route));
+  c.dataset.route = V.route;
+  const key = [V.route, V.sub, pc ? 'pc' : 'm', moi ? 'moi' : 'cu', V.route === 'sua' && !pc ? V.id : ''].join('|');
   const fresh = key !== layoutKey;
   // Giữ ô đang gõ (ô tìm kiếm) khi vẽ lại
   const ae = document.activeElement;
@@ -324,8 +328,9 @@ function renderContent() {
 
   if (V.route === 'gd' || (V.route === 'sua' && pc)) {
     if (pc) {
-      if (fresh) { c.innerHTML = `<div class="split"><div id="gdl"></div><aside class="side-panel" id="gdp" aria-label="Thêm / sửa giao dịch"></aside></div>`; panelKey = ''; }
-      $('#gdl').innerHTML = SC.dueBanner() + pcList();
+      if (fresh) { c.innerHTML = `${moi ? '<div id="gdband"></div>' : ''}<div class="split"><div id="gdl"></div><aside class="side-panel" id="gdp" aria-label="Thêm / sửa giao dịch"></aside></div>`; panelKey = ''; }
+      if (moi) $('#gdband').innerHTML = V.sub === 'thang' && V.route !== 'sua' ? '' : band(monthList());
+      $('#gdl').innerHTML = SC.dueBanner() + pcList(moi);
       mountPanel();
     } else {
       c.innerHTML = SC.dueBanner() + mobileGd();
@@ -338,16 +343,17 @@ function renderContent() {
       mountTxForm($('#editp'), { tx: st.byId(V.id), variant: 'page', onDone: leaveEdit });
     }
   } else if (V.route === 'caidat') {
-    c.innerHTML = settingsHtml(pc);
+    c.innerHTML = settingsHtml(pcL);
   } else if (V.route === 'thongke') {
     c.innerHTML = notConnected() + SC.statsHtml(pc);
   } else if (V.route === 'vi') {
-    c.innerHTML = notConnected() + SC.dueBanner() + SC.walletsHtml(pc);
+    c.innerHTML = notConnected() + SC.dueBanner() + SC.walletsHtml(pcL);
   } else if (V.route === 'ngansach') {
-    c.innerHTML = notConnected() + SC.budgetsHtml(pc);
+    c.innerHTML = notConnected() + SC.budgetsHtml(pcL, moi);
   } else if (V.route === 'congno') {
     c.innerHTML = notConnected() + SC.debtsHtml(pc);
   }
+  skinContent(c);
   if (keep) { const n = document.getElementById(keep.id); if (n) { n.focus(); try { n.setSelectionRange(keep.s, keep.s); } catch (e) { /* bỏ qua */ } } }
   if (fresh) { layoutKey = key; window.scrollTo(0, 0); }
 }
@@ -366,7 +372,7 @@ function mobileGd() {
   return nc + band(list) + (dayGroups(list) || '<div class="empty">Chưa có giao dịch trong tháng này.<br>Bấm + để thêm.</div>') + budgetBlock();
 }
 
-function pcList() {
+function pcList(boBand = false) {
   const list = monthList();
   const tabs = `<div class="utabs gd-tabs" role="tablist">${SUBS.map(([k, t]) => `<button role="tab" class="${k === V.sub ? 'on' : ''}" aria-selected="${k === V.sub}" data-act="sub" data-sub="${k}">${t}</button>`).join('')}</div>`;
   const sub = V.route === 'sua' ? 'ngay' : V.sub;
@@ -382,7 +388,7 @@ function pcList() {
     const fl = filtered(list);
     body = dayGroups(fl) || `<div class="empty">${list.length ? 'Không có giao dịch khớp bộ lọc.' : 'Chưa có giao dịch trong tháng này.'}</div>`;
   }
-  return notConnected() + (sub === 'thang' ? '' : band(list)) + tabs + fil + body;
+  return notConnected() + (sub === 'thang' || boBand ? '' : band(list)) + tabs + fil + body;
 }
 
 // Panel phải PC: form thêm mới, hoặc sửa khi đang ở #/sua/<id>
@@ -456,6 +462,8 @@ function settingsHtml(pc) {
     <div class="sec" id="s-ht">Hiển thị</div>
     <div class="set tall"><span>Giao diện</span><span class="seg" role="radiogroup" aria-label="Giao diện">
       ${[['light', 'Sáng', 'sáng'], ['dark', 'Tối', 'tối'], ['auto', 'Tự động', 'tự động']].map(([k, t, v]) => `<button role="radio" aria-checked="${theme === k}" class="${theme === k ? 'on' : ''}" data-act="theme" data-v="${v}">${t}</button>`).join('')}</span></div>
+    <div class="set tall"><span>Mẫu thiết kế</span><span class="seg" role="radiogroup" aria-label="Mẫu thiết kế">
+      ${[['moi', 'Mới'], ['cu', 'Cũ']].map(([k, t]) => `<button role="radio" aria-checked="${(isMoi() ? 'moi' : 'cu') === k}" class="${(isMoi() ? 'moi' : 'cu') === k ? 'on' : ''}" data-act="skin" data-v="${k}">${t}</button>`).join('')}</span></div>
     ${go2('set-numfmt', 'Định dạng số', num(1234567) + ' đ')}
     ${go2('set-week', 'Tuần bắt đầu', ws)}
     <div class="sec" id="s-rieng">Giao diện riêng</div>
@@ -474,9 +482,13 @@ function settingsHtml(pc) {
     ${go2('csv', 'Nhập / Xuất CSV', '')}
     <button class="set" data-act="install"><span>Cài ứng dụng lên máy</span><span class="val">${inst}</span></button>
     <button class="set danger" data-act="wipe"><span>Xóa dữ liệu trên máy</span><span class="val">›</span></button>
+    <div class="sec" id="s-xoa">Xóa dữ liệu cả Google Sheet</div>
+    <button class="set" data-act="wipe-pass"><span>Mật khẩu xóa dữ liệu</span><span class="val">Đặt / đổi ›</span></button>
+    <button class="set danger" data-act="wipe-tx"><span>Xóa giao dịch và số dư ví</span><span class="val">›</span></button>
+    <button class="set danger" data-act="wipe-all"><span>Xóa tất cả dữ liệu</span><span class="val">›</span></button>
     <div class="ver">Penny v${U.VERSION} · API v${esc(S.apiVer || '?')}</div>`;
   if (!pc) return body;
-  const nav = [['tt', 'Thông tin'], ['ht', 'Hiển thị'], ['rieng', 'Giao diện riêng'], ['dm', 'Danh mục & từ khóa'], ['db', 'Đồng bộ & dữ liệu']]
+  const nav = [['tt', 'Thông tin'], ['ht', 'Hiển thị'], ['rieng', 'Giao diện riêng'], ['dm', 'Danh mục & từ khóa'], ['db', 'Đồng bộ & dữ liệu'], ['xoa', 'Xóa dữ liệu']]
     .map(([k, t]) => `<button class="${V.setSec === k ? 'on' : ''}" data-act="setsec" data-sec="${k}">${t}</button>`).join('');
   return `<div class="setwrap"><nav class="setnav" aria-label="Mục cài đặt">${nav}</nav><div class="setbody">${body}</div></div>`;
 }
@@ -595,6 +607,7 @@ async function onAct(b, e) {
       break;
     }
     case 'theme': await st.setSetting('theme', b.dataset.v); break;
+    case 'skin': setSkin(b.dataset.v); st.applySettings(); layoutKey = ''; panelKey = ''; render(); toast(b.dataset.v === 'cu' ? 'Đã chuyển sang mẫu thiết kế cũ' : 'Đã chuyển sang mẫu thiết kế mới'); break;
     case 'conn': openConn(); break;
     case 'setsec': {
       V.setSec = b.dataset.sec;
@@ -617,6 +630,9 @@ async function onAct(b, e) {
       location.reload();
       break;
     }
+    case 'wipe-pass': (await import('./wipe.js')).passAct(); break;
+    case 'wipe-tx': (await import('./wipe.js')).wipeAct('giao_dich'); break;
+    case 'wipe-all': (await import('./wipe.js')).wipeAct('tat_ca'); break;
     default: await manageAct(a, b, { render, openAdd, go }); break;
   }
 }
@@ -657,6 +673,7 @@ function registerSW() {
 }
 
 async function start() {
+  applySkin();
   const gotCfg = sy.readCfgFromHash();
   await st.load();
   parseHash();

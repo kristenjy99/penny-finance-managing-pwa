@@ -285,6 +285,21 @@ button.set { cursor: pointer; }
 .hero .sub { font-size: 14px; line-height: 20px; font-weight: 600; }
 .hero .sub2 { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--ink2); }
 
+/* Thống kê: không có dải Thu/Chi (hình mới), tháng chọn ở header */
+[data-skin="moi"] .content[data-route="thongke"] > .band { display: none; }
+/* Cài đặt: thẻ đầu không đè lên header (hình mới) */
+[data-skin="moi"] .content[data-route="caidat"] { margin-top: 18px; }
+/* Form giao dịch: tab Chi/Thu/… dạng nút trượt, nhãn nằm trong ô */
+[data-skin="moi"] .txf .ftabs { background: var(--bg2); border: 0; border-radius: 12px; padding: 4px; gap: 2px; }
+[data-skin="moi"] .txf .ftabs button { height: 36px; border: 0; border-radius: 9px; color: var(--ink2); font-weight: 600; }
+[data-skin="moi"] .txf .ftabs button.on { background: var(--card); color: var(--ink); border: 0; }
+[data-skin="moi"] .txf .fld { position: relative; border: 1px solid var(--bd); border-radius: 12px; background: var(--field); padding: 7px 14px 4px; }
+[data-skin="moi"] .txf .fld:focus-within { border-color: var(--pri); }
+[data-skin="moi"] .txf .fld > label { font-size: 10px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--ink2); margin: 0; }
+[data-skin="moi"] .txf .fld .inp, [data-skin="moi"] .panel-b .txf .fld .inp { border: 0; background: none; height: 28px; min-height: 28px; padding: 0; border-radius: 0; font-weight: 600; font-size: 15px; }
+[data-skin="moi"] .txf .fld .datef .dshow { border: 0; background: none; padding: 0; height: 28px; min-height: 28px; }
+[data-skin="moi"] .txf .fld .hint { margin-bottom: 4px; }
+
 /* Thống kê */
 .donut-wrap { display: flex; justify-content: center; padding: 17px 0 11px; }
 .donut { position: relative; width: 160px; height: 160px; }
@@ -610,4 +625,219 @@ button.leg { width: 100%; border: 0; border-bottom: 1px solid var(--line); backg
   .sc.pc .sc-foot .sp { flex: 1; }
   .sc.pc .sc-vi { width: auto; min-width: 124px; min-height: 40px; font-size: 15px; font-weight: 600; }
   .sc.pc .sc-foot .btn { width: 108px; min-height: 60px; line-height: 1.25; padding: 0 12px; }
+}
+
+/* =====================================================================
+   v0.7.0 – MẪU THIẾT KẾ MỚI (html[data-skin="moi"]) – theo bộ hình redesign
+   Thẻ trắng bo góc 18px, header bo đáy, dải số liệu nổi, thanh tab trắng, nút màu nhấn --pri, font Be Vietnam Pro.
+   Mẫu cũ (data-skin="cu") giữ nguyên toàn bộ quy tắc ở trên.
+   ===================================================================== */
+html[data-skin="moi"][data-theme="light"], html[data-skin="moi"]:not([data-theme]) {
+  --bg: #FCF6F8; --card: #FFFFFF; --acc: #F4C9D8; --bg2: #F6E2E9; --line: #F2E0E6; --bd: #F2E0E6;
+  --pri: #E0709A; --pri-fg: #FFFFFF; --ink: #35232E; --ink2: #947986; --inc: #6953D5; --exp: #D4486B; --mute: #B9A3AE;
+  --tile: #E0709A; --tile-fg: #FFFFFF; --field: #FFFFFF; --acc2: #E0709A; --bar: var(--pri);
+  --c1: #E0709A; --c2: #B6A3E6; --c3: #F2CC8F; --c4: #8FC9E8; --c5: #F4A6BE; --c6: #A8D8B9;
+}
+html[data-skin="moi"][data-theme="dark"] {
+  --bg: #1C1418; --card: #271D22; --acc: #3B2631; --bg2: #33262C; --line: #3E2E36; --bd: #3E2E36;
+  --pri: #E0709A; --pri-fg: #FFFFFF; --ink: #F7EAF0; --ink2: #B898A7; --inc: #A99BF0; --exp: #F07D97; --mute: #7D6872;
+  --tile: #E0709A; --tile-fg: #FFFFFF; --field: #221A1E; --acc2: #E0709A; --bar: var(--pri);
+  --c1: #E0709A; --c2: #9F8CE0; --c3: #D9B06E; --c4: #6FAED0; --c5: #C9809A; --c6: #7FB894;
+}
+html[data-skin="moi"] body, html[data-skin="moi"] body :is(div, span, b, small, button, input, select, textarea, h1, h2, h3, p, a, label, li, strong) {
+  font-family: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif !important;
+}
+html[data-skin="moi"] body { background: var(--bg); font-weight: 500; font-size: 15px; }
+
+/* ---- Header bo đáy + dải số liệu / tab nổi ---- */
+[data-skin="moi"] .top { position: relative; z-index: 1; border-radius: 0 0 28px 28px; padding-bottom: 22px; }
+[data-skin="moi"] .top-row, [data-skin="moi"] .top.has-tabs .top-row { height: 82px; padding: 8px 22px 0; }
+[data-skin="moi"] .top h1 { font-size: 28px; font-weight: 700; letter-spacing: -.3px; padding-top: 0; }
+[data-skin="moi"] .content { position: relative; z-index: 2; margin-top: -22px; padding-left: 16px; padding-right: 16px; }
+[data-skin="moi"] .top.has-tabs { padding-bottom: 0; }
+[data-skin="moi"] .top.has-tabs + .content { margin-top: 12px; }
+[data-skin="moi"] .top .utabs { position: relative; z-index: 3; margin: 0 16px -22px; padding: 4px; height: 44px; background: var(--card); border: 1px solid var(--bd); border-radius: 14px; gap: 2px; }
+[data-skin="moi"] .top .utabs button { height: 34px; border: 0; border-radius: 10px; font-size: 13.5px; font-weight: 600; color: var(--ink2); }
+[data-skin="moi"] .top .utabs button.on { color: var(--ink); font-weight: 700; background: none; }
+[data-skin="moi"] .pill { height: 34px; min-width: 84px; border-radius: 10px; background: var(--card); border-color: var(--bd); font-weight: 600; font-size: 14px; }
+[data-skin="moi"] .pill .mlbl { font-size: 14px; }
+[data-skin="moi"] .piggy { border-radius: 12px; }
+[data-skin="moi"] .tbtn { border-radius: 10px; background: var(--card); height: 36px; }
+[data-skin="moi"] .tbtn.light { background: var(--bg2); border-color: transparent; }
+
+/* Ví: phần tổng trên header */
+[data-skin="moi"] .top.has-hero .top-row { position: absolute; right: 0; top: 0; height: 82px; }
+[data-skin="moi"] .top.has-hero h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+[data-skin="moi"] .hero { padding: 26px 22px 12px; background: none; }
+[data-skin="moi"] .hero .lbl { font-size: 11px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; color: var(--ink2); margin: 0; }
+[data-skin="moi"] .hero .big { font: 700 30px/1.15 "Be Vietnam Pro", sans-serif; letter-spacing: -.5px; margin: 4px 0 4px; }
+[data-skin="moi"] .hero .sub { font-size: 12.5px; color: var(--ink2); }
+[data-skin="moi"] .hero .sub2 { display: none; }
+
+/* ---- Dải THU / CHI / TỔNG thành thẻ nổi ---- */
+[data-skin="moi"] .band { height: auto; min-height: 72px; margin: 0 0 14px; background: var(--card); border: 1px solid var(--bd); border-radius: 18px; padding: 12px 6px; align-items: center; }
+[data-skin="moi"] .band > div { padding: 0 4px; }
+[data-skin="moi"] .band > div + div::before { display: none; }
+[data-skin="moi"] .band .lb { font-size: 10.5px; letter-spacing: .5px; line-height: 15px; }
+[data-skin="moi"] .band .vl { font: 600 16.5px/24px "Be Vietnam Pro", sans-serif; letter-spacing: -.2px; }
+[data-skin="moi"] .band.gband { display: none; }
+
+/* ---- Thẻ ---- */
+[data-skin="moi"] .card { background: var(--card); border: 1px solid var(--bd); border-radius: 18px; padding: 6px 16px 8px; margin-bottom: 14px; overflow: hidden; }
+[data-skin="moi"] .sec { height: auto; min-height: 40px; padding: 14px 0 6px; background: none; font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--ink2); }
+[data-skin="moi"] .sec .r { font-size: 11px; }
+[data-skin="moi"] .sec.dh { text-transform: none; letter-spacing: 0; font-size: 12.5px; padding: 12px 4px 4px; }
+[data-skin="moi"] .sec.dh .r { font-size: 12.5px; }
+[data-skin="moi"] .sec.st { text-transform: none; letter-spacing: 0; font-size: 15px; font-weight: 600; color: var(--ink); padding-top: 14px; }
+[data-skin="moi"] .sec .secbtn { text-transform: none; letter-spacing: 0; }
+[data-skin="moi"] .row { background: none; padding: 9px 0; min-height: 60px; border-bottom: 1px solid var(--line); gap: 12px; }
+[data-skin="moi"] .card .row:last-child, [data-skin="moi"] .card .row:has(+ .sec), [data-skin="moi"] .card .row:has(+ .cardline) { border-bottom: 0; }
+[data-skin="moi"] .row.on { background: none; }
+[data-skin="moi"] .row .av, [data-skin="moi"] .sic { width: 40px; height: 40px; border-radius: 10px; background: var(--bg2); color: var(--ink); font-size: 16px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+[data-skin="moi"] .row .t1 { font-size: 15.5px; font-weight: 600; }
+[data-skin="moi"] .row .t2 { font-size: 12.5px; }
+[data-skin="moi"] .row .amt { font-size: 15.5px; font-weight: 600; }
+[data-skin="moi"] .empty { color: var(--ink2); }
+[data-skin="moi"] .card > .empty { padding: 28px 8px; }
+
+/* Thanh tiến độ */
+[data-skin="moi"] .bar { height: 10px; border-radius: 5px; background: var(--bg2); border: 0; overflow: hidden; }
+[data-skin="moi"] .bar > i { border-radius: 5px; background: var(--pri); }
+[data-skin="moi"] .bar.mid > i { background: var(--pri); }
+[data-skin="moi"] .bar.over > i { background: var(--exp); }
+[data-skin="moi"] .bud { padding: 10px 0 2px; }
+[data-skin="moi"] .bud .h { font-size: 14px; }
+[data-skin="moi"] .brow { background: none; border: 0; padding: 12px 0 6px; }
+[data-skin="moi"] .brow .l1 { font-size: 14.5px; font-weight: 600; }
+[data-skin="moi"] .brow .l2 { font-size: 12.5px; color: var(--ink2); margin: 2px 0 8px; }
+[data-skin="moi"] .card > .brow:first-of-type, [data-skin="moi"] .card > .bud:first-child { padding-top: 14px; }
+
+/* Nút, ô chọn, công tắc */
+[data-skin="moi"] .btn { border-radius: 12px; background: var(--bg2); border: 1px solid transparent; font-weight: 600; min-height: 44px; }
+[data-skin="moi"] .btn.pri { background: var(--pri); color: var(--pri-fg); }
+[data-skin="moi"] .btn.danger { color: var(--exp); }
+[data-skin="moi"] .btn.pri.danger { background: var(--exp); color: #fff; }
+[data-skin="moi"] .btn.sm { border-radius: 10px; }
+[data-skin="moi"] .pad { padding: 0 0 14px; }
+[data-skin="moi"] .btns.pad { padding: 0 0 14px; }
+[data-skin="moi"] .pad .btn.wide { background: var(--card); border: 1px solid var(--bd); }
+[data-skin="moi"] .seg { background: var(--bg2); border: 0; border-radius: 12px; padding: 4px; gap: 2px; }
+[data-skin="moi"] .seg button { border: 0; border-radius: 9px; background: none; color: var(--ink2); font-weight: 600; }
+[data-skin="moi"] .seg button.on { background: var(--card); color: var(--ink); }
+[data-skin="moi"] .switch input:checked + i { background: var(--pri); border-color: var(--pri); }
+[data-skin="moi"] .inp, [data-skin="moi"] select.inp, [data-skin="moi"] button.inp { border-radius: 12px; background: var(--field); border-color: var(--bd); }
+[data-skin="moi"] .inp:focus { border-color: var(--pri); outline: none; }
+[data-skin="moi"] .tag { border-radius: 6px; }
+[data-skin="moi"] .note { color: var(--ink2); padding: 2px 4px 16px; font-size: 12.5px; }
+[data-skin="moi"] .note b { color: var(--ink); }
+
+/* Cảnh báo (! trong ô trắng) */
+[data-skin="moi"] .alert, [data-skin="moi"] .remain { display: flex; align-items: center; gap: 14px; margin: 10px 0 8px; padding: 12px 14px; background: var(--bg2); border-radius: 14px; font-size: 14px; font-weight: 600; line-height: 1.4; }
+[data-skin="moi"] .alert .piggy { display: none; }
+[data-skin="moi"] .alert::before, [data-skin="moi"] .remain::before { content: "!"; flex: none; width: 30px; height: 30px; border-radius: 8px; background: var(--card); color: var(--exp); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
+[data-skin="moi"] .alert ~ .bud { display: none; }
+[data-skin="moi"] .remain { justify-content: flex-start; }
+[data-skin="moi"] .remain > span { display: none; }
+[data-skin="moi"] .remain::after { content: attr(data-say); }
+[data-skin="moi"] .hrow { display: flex; align-items: center; gap: 12px; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 10px 0; min-height: 60px; width: 100%; }
+[data-skin="moi"] .hrow > span:nth-child(2) { flex: 1; text-align: left; font-weight: 600; font-size: 15px; }
+[data-skin="moi"] .hrow .num { font-weight: 600; }
+[data-skin="moi"] .hrow .sic { font-size: 15px; }
+[data-skin="moi"] .dbtns { padding: 4px 0 12px; }
+
+/* Thống kê: không có dải Thu/Chi (hình mới), tháng chọn ở header */
+[data-skin="moi"] .content[data-route="thongke"] > .band { display: none; }
+/* Cài đặt: thẻ đầu không đè lên header (hình mới) */
+[data-skin="moi"] .content[data-route="caidat"] { margin-top: 18px; }
+/* Form giao dịch: tab Chi/Thu/… dạng nút trượt, nhãn nằm trong ô */
+[data-skin="moi"] .txf .ftabs { background: var(--bg2); border: 0; border-radius: 12px; padding: 4px; gap: 2px; }
+[data-skin="moi"] .txf .ftabs button { height: 36px; border: 0; border-radius: 9px; color: var(--ink2); font-weight: 600; }
+[data-skin="moi"] .txf .ftabs button.on { background: var(--card); color: var(--ink); border: 0; }
+[data-skin="moi"] .txf .fld { position: relative; border: 1px solid var(--bd); border-radius: 12px; background: var(--field); padding: 7px 14px 4px; }
+[data-skin="moi"] .txf .fld:focus-within { border-color: var(--pri); }
+[data-skin="moi"] .txf .fld > label { font-size: 10px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--ink2); margin: 0; }
+[data-skin="moi"] .txf .fld .inp, [data-skin="moi"] .panel-b .txf .fld .inp { border: 0; background: none; height: 28px; min-height: 28px; padding: 0; border-radius: 0; font-weight: 600; font-size: 15px; }
+[data-skin="moi"] .txf .fld .datef .dshow { border: 0; background: none; padding: 0; height: 28px; min-height: 28px; }
+[data-skin="moi"] .txf .fld .hint { margin-bottom: 4px; }
+
+/* Thống kê */
+[data-skin="moi"] .perbar { background: var(--card); border: 1px solid var(--bd); border-radius: 16px; margin-bottom: 14px; padding: 6px 8px; }
+[data-skin="moi"] .donut-wrap { padding: 18px 0 6px; }
+[data-skin="moi"] .donut .dc span { color: var(--ink2); }
+[data-skin="moi"] .donut .dc b { font: 700 19px/1.25 "Be Vietnam Pro", sans-serif; }
+[data-skin="moi"] .donut svg circle { stroke: none; }
+[data-skin="moi"] .card > .sec.dh:not(:first-child) { display: none; }
+[data-skin="moi"] .leg { padding: 12px 0; border: 0; border-bottom: 1px solid var(--line); background: none; font-size: 15.5px; font-weight: 600; width: 100%; }
+[data-skin="moi"] .leg:last-of-type { border-bottom: 0; }
+[data-skin="moi"] .leg i { width: 16px; height: 16px; border-radius: 4px; }
+[data-skin="moi"] .mbars { padding: 4px 0 6px; }
+
+/* Cài đặt: dòng có ô chữ cái */
+[data-skin="moi"] .set { background: none; padding: 8px 0; min-height: 60px; gap: 12px; border-bottom: 1px solid var(--line); }
+[data-skin="moi"] .card .set:last-child { border-bottom: 0; }
+[data-skin="moi"] .set > span:nth-child(2):not(.val):not(.seg) { flex: 1; font-weight: 600; }
+[data-skin="moi"] .set .val { font-weight: 600; color: var(--ink); }
+[data-skin="moi"] .set.danger, [data-skin="moi"] .set.danger > span:nth-child(2) { color: var(--exp); }
+[data-skin="moi"] .set.tall .seg { font-size: 14px; }
+[data-skin="moi"] .ver { text-align: center; padding: 6px 0 20px; }
+
+/* Thanh tab dưới (thẻ trắng) + nút + */
+[data-skin="moi"] .tabbar { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); height: 68px; padding: 0 6px; background: var(--card); border: 1px solid var(--bd); border-radius: 22px; }
+[data-skin="moi"] .tabbar a { height: 54px; min-width: 56px; padding: 0 4px; border-radius: 16px; font-size: 10.5px; gap: 3px; }
+[data-skin="moi"] .tabbar a.on { background: var(--acc); }
+[data-skin="moi"] .fab { right: 20px; bottom: calc(92px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 16px; border: 0; background: var(--pri); color: var(--pri-fg); }
+
+/* Bottom sheet / hộp thoại */
+[data-skin="moi"] .sheet { border-radius: 22px 22px 0 0; background: var(--card); }
+[data-skin="moi"] .sheet-h h2 { font-weight: 700; }
+[data-skin="moi"] .duebar, [data-skin="moi"] .banner { background: var(--card); border: 1px solid var(--bd); border-radius: 18px; margin-bottom: 14px; }
+[data-skin="moi"] .toast { border-radius: 14px; }
+
+@media (min-width: 900px) {
+  [data-skin="moi"] .sheet { border-radius: 20px; }
+  [data-skin="moi"] .app { grid-template-columns: 210px minmax(0, 1fr); }
+  [data-skin="moi"] .side { background: var(--card); border-right: 1px solid var(--bd); padding: 20px 14px 20px; }
+  [data-skin="moi"] .logo { font: 700 19px/1 "Be Vietnam Pro", sans-serif; padding: 0 0 20px 6px; }
+  [data-skin="moi"] .side nav a { height: 42px; border-radius: 12px; font-weight: 500; margin-bottom: 6px; }
+  [data-skin="moi"] .side nav a.on { background: var(--acc); font-weight: 600; }
+  [data-skin="moi"] .syncbox { border: 0; background: var(--bg2); border-radius: 14px; padding: 14px; }
+  [data-skin="moi"] .syncbox .btn { background: var(--pri); color: var(--pri-fg); height: 36px; min-height: 36px; border-radius: 12px; font-size: 14px; }
+
+  [data-skin="moi"] .top { border-radius: 0 0 32px 32px; padding-bottom: 22px; }
+  [data-skin="moi"] .top-row, [data-skin="moi"] .top.has-tabs .top-row { height: 78px; padding: 0 28px; }
+  [data-skin="moi"] .top h1 { font-size: 28px; }
+  [data-skin="moi"] .top .utabs { display: flex; width: 340px; margin: 0 24px -22px; }
+  [data-skin="moi"] .content { padding: 0 24px 28px; min-height: 0; }
+  [data-skin="moi"] .top.has-hero .top-row { height: 78px; }
+  [data-skin="moi"] .hero { padding: 20px 28px 8px; }
+  [data-skin="moi"] .band { min-height: 46px; padding: 6px; margin-bottom: 16px; border-radius: 14px; }
+  [data-skin="moi"] .band .lb { font-size: 9.5px; line-height: 13px; }
+  [data-skin="moi"] .band .vl { font-size: 15.5px; line-height: 21px; }
+
+  [data-skin="moi"] .split, [data-skin="moi"] .split.cal-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; min-height: 0; align-items: start; }
+  [data-skin="moi"] .split.cal-split { grid-template-columns: minmax(0, 1fr) 341px; }
+  [data-skin="moi"] .split > div, [data-skin="moi"] .split > .side-panel { background: var(--card); border: 1px solid var(--bd); border-radius: 18px; overflow: hidden; }
+  [data-skin="moi"] #gdl { padding: 6px 16px 10px; }
+  [data-skin="moi"] #gdl .card { border: 0; padding: 0; margin: 0; border-radius: 0; }
+  [data-skin="moi"] .split > .side-panel > .panel-b, [data-skin="moi"] .cal-panel { background: none; }
+  [data-skin="moi"] .panel-b { padding: 18px 16px 18px; }
+  [data-skin="moi"] .panel-b h2 { font: 600 16px/1.4 "Be Vietnam Pro", sans-serif; margin-bottom: 12px; }
+  [data-skin="moi"] .panel-b .btn { background: var(--bg2); }
+  [data-skin="moi"] .panel-b .btn.pri { background: var(--pri); color: var(--pri-fg); }
+  [data-skin="moi"] .panel-b .inp { height: 44px; min-height: 44px; border-radius: 12px; }
+  [data-skin="moi"] .gd-tabs { border: 0; background: var(--bg2); border-radius: 12px; padding: 4px; margin: 10px 0 4px; }
+  [data-skin="moi"] .gd-tabs button { height: 34px; border: 0; border-radius: 9px; font-size: 14px; color: var(--ink2); }
+  [data-skin="moi"] .gd-tabs button.on { background: var(--card); color: var(--ink); }
+  [data-skin="moi"] .filters { padding: 8px 0; background: none; border: 0; }
+
+  [data-skin="moi"] .st-grid, [data-skin="moi"] .dgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  [data-skin="moi"] .st-l, [data-skin="moi"] .st-r, [data-skin="moi"] .dl, [data-skin="moi"] .dr { border: 0; padding: 0; background: none; }
+  [data-skin="moi"] .st-tabs { display: none; }
+  [data-skin="moi"] .st-r h2 { font: 600 15px/1.4 "Be Vietnam Pro", sans-serif; margin: 12px 0 8px; }
+  [data-skin="moi"] .st-r h2 small { display: none; }
+
+  /* Ví, Ngân sách, Cài đặt: lưới 2 cột thẻ */
+  [data-skin="moi"] .content.cgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 16px; align-content: start; }
+  [data-skin="moi"] .content.cgrid > :not(.card) { grid-column: 1 / -1; }
+  [data-skin="moi"] .content.cgrid > .card { margin-bottom: 16px; }
 }

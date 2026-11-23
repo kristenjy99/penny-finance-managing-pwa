@@ -1,4 +1,5 @@
 // Dữ liệu trong bộ nhớ + lưu IndexedDB + hàng đợi thay đổi + các phép tính
+import { isMoi, moiColors } from './skin.js';
 import * as db from './db.js';
 import { boDau, nfc, chuanCoDau, chuanKhongDau, nowIso, uid, ym, thisMonth, sum, setNumFormat, today, toDate } from './util.js';
 import { setBrandIcon } from './ui.js';
@@ -83,15 +84,32 @@ export function mixHex(a, b, t) {
 }
 function applyBrand(dark) {
   const c = themeColors();
+  if (isMoi()) return applyBrandMoi(dark, c);
   const tok = { acc: '--acc', bg: '--bg', bg2: '--bg2', line: '--line', bd: '--bd', inc: '--inc', exp: '--exp' };
   let css = '';
   Object.entries(tok).forEach(([k, v]) => { if (HEX.test(c[k] || '')) css += `${v}:${c[k]};`; });
   if (HEX.test(c.acc || '')) css += `--acc2:${mixHex(c.acc, '#3A2E4D', 0.25)};`;
   let st = document.getElementById('brand-css');
   if (!st) { st = document.createElement('style'); st.id = 'brand-css'; document.head.appendChild(st); }
-  st.textContent = css ? `[data-theme="light"]{${css}}` : '';
+  st.textContent = css ? `html[data-skin="cu"][data-theme="light"]{${css}}` : '';
+  brandCommon(dark ? '#5B4A72' : (HEX.test(c.acc || '') ? c.acc : '#C5B3D3'));
+}
+// Mẫu mới: biến màu riêng (header --acc, nút --pri, ô --bg2…)
+function applyBrandMoi(dark, c) {
+  const m = moiColors(c);
+  const tok = { hdr: '--acc', bg: '--bg', tile: '--bg2', bd: '--bd', pri: '--pri', inc: '--inc', exp: '--exp', ink: '--ink', ink2: '--ink2' };
+  let css = '';
+  Object.entries(tok).forEach(([k, v]) => { if (HEX.test(m[k] || '')) css += `${v}:${m[k]};`; });
+  if (HEX.test(m.bd || '')) css += `--line:${m.bd};`;
+  if (HEX.test(m.pri || '')) css += `--c1:${m.pri};--tile:${m.pri};`;
+  let st = document.getElementById('brand-css');
+  if (!st) { st = document.createElement('style'); st.id = 'brand-css'; document.head.appendChild(st); }
+  st.textContent = css ? `html[data-skin="moi"][data-theme="light"]{${css}}` : '';
+  brandCommon(dark ? '#3A2530' : (m.hdr || '#F4C9D8'));
+}
+function brandCommon(mau) {
   const meta = document.querySelector('meta[name=theme-color]');
-  if (meta) meta.content = dark ? '#5B4A72' : (HEX.test(c.acc || '') ? c.acc : '#C5B3D3');
+  if (meta) meta.content = mau;
   document.title = appName();
   const icon = setting('app_icon');
   setBrandIcon(icon);

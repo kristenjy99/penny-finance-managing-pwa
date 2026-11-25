@@ -7,6 +7,7 @@ import { S, L } from './store.js';
 import { openSheet, confirmBox, toast, pickOne, ask } from './ui.js';
 import { SV, budStatus, cardStatus, perSet, perShift, walletIcon, MAU_SAN, snoozeCard } from './screens.js';
 import { zipStore } from './xlsx.js';
+import * as TKU from './tkui.js';
 import { openCsv } from './csv.js';
 
 const same = (a, b) => U.boDau(a) === U.boDau(b);
@@ -20,6 +21,7 @@ export function openWallet(key = '', onSaved = null) {
   if (w && w.nhom && !nhoms.includes(w.nhom) && w.nhom !== 'Khác') nhoms.push(w.nhom);
   let nhom = w && w.nhom !== 'Khác' ? w.nhom : st.NHOM_VI[0];
   const the = () => nhom === st.NHOM_THE;
+  const tk = () => nhom === st.NHOM_TK;
   const info = w && st.isCard(w) ? st.cardInfo(w) : null;
   const tt = info ? cardStatus(info) : '';
   const viKhac = st.walletNames().filter((x) => x !== (w && w.ten_vi) && !st.isCard(st.S.acc.find((a) => a.ten_vi === x) || {}));
@@ -28,7 +30,7 @@ export function openWallet(key = '', onSaved = null) {
   const ICONS = ['💵', '👛', '📱', '🏦', '💳', '💰', '🐷', '🪙', '🏧', '💼', '🏠', '🎓'];
   const tat = (ten) => U.boDau(ten).split(/[^0-9a-z]+/).filter(Boolean).map((x) => x[0]).join('');
   openSheet({
-    title: w ? (st.isCard(w) ? 'Thẻ tín dụng' : 'Sửa ví') : 'Thêm ví', cls: 'mid',
+    title: w ? (st.isCard(w) ? 'Thẻ tín dụng' : st.isSaving(w) ? 'Sổ tiết kiệm' : 'Sửa ví') : 'Thêm ví', cls: 'mid',
     body: `<form novalidate>
       ${info ? `<div class="cardbox"><div class="cb1"><span>Dư nợ</span><b class="num exp">${num(info.no)}</b></div>
         ${info.lim ? `<div class="cb1"><span>Hạn mức còn lại</span><b class="num ${info.con < 0 ? 'exp' : ''}">${info.con < 0 ? U.MINUS : ''}${num(info.con)}</b></div>
@@ -44,7 +46,7 @@ export function openWallet(key = '', onSaved = null) {
           <label class="btn filebtn">Tải ảnh logo<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" data-icfile></label></div>
         <div class="hint">Để trống thì dùng chữ cái đầu. Ảnh logo (ví dụ logo ngân hàng) được thu nhỏ còn 64×64.</div></div>
       <div class="fld"><span class="lbl">Nhóm</span><div class="seg" role="radiogroup">${nhoms.map((n) => `<button type="button" role="radio" data-nhom="${esc(n)}" class="${n === nhom ? 'on' : ''}" aria-checked="${n === nhom}">${esc(n)}</button>`).join('')}</div></div>
-      <div class="fld"><label for="w-sd">Số dư đầu</label><input class="inp" id="w-sd" name="sd" inputmode="text" value="${w ? (w.so_du_dau < 0 ? U.MINUS : '') + num(w.so_du_dau) : '0'}" autocomplete="off">
+      <div class="fld" data-sdwrap ${!w && tk() ? 'hidden' : ''}><label for="w-sd">Số dư đầu</label><input class="inp" id="w-sd" name="sd" inputmode="text" value="${w ? (w.so_du_dau < 0 ? U.MINUS : '') + num(w.so_du_dau) : '0'}" autocomplete="off">
         <div class="hint" data-sdhint>${the() ? 'Dư nợ thẻ trước giao dịch đầu tiên, nhập số âm. Ví dụ đang nợ 1.200.000 thì nhập −1.200.000.' : 'Số tiền có sẵn trong ví trước giao dịch đầu tiên.'}</div></div>
       <div data-the ${the() ? '' : 'hidden'}>
         <div class="fld"><label for="w-hm">Hạn mức tín dụng</label><input class="inp" id="w-hm" name="hm" value="${esc(so(w && w.han_muc))}" placeholder="30.000.000" autocomplete="off"></div>
@@ -54,6 +56,7 @@ export function openWallet(key = '', onSaved = null) {
         <div class="grid2"><div class="fld"><label for="w-tt">% thanh toán tối thiểu</label><input class="inp" id="w-tt" name="tt" inputmode="decimal" value="${esc((w && w.tt_toi_thieu) || 5)}" autocomplete="off"></div>
           <div class="fld"><label for="w-vt">Ví thanh toán</label><select class="inp" id="w-vt" name="vt"><option value="">(chọn khi trả)</option>${viKhac.map((x) => `<option ${w && w.vi_thanh_toan === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div></div>
       </div>
+      ${TKU.tkFields(w ? (st.isSaving(w) ? w : { ten_vi: w.ten_vi }) : null)}
       <div class="fld"><label for="w-tat">Tên tắt cho bot Telegram</label><input class="inp" id="w-tat" name="tat" value="${esc(w ? w.viet_tat || '' : '')}" placeholder="ví dụ: vcb, vcbm" autocomplete="off">
         <div class="hint" data-tathint>Bot tự hiểu tên đầy đủ (có / không dấu), vài chữ đầu và chữ cái đầu mỗi từ${w ? ` (“${esc(tat(w.ten_vi))}”)` : ''}. Thêm tên tắt riêng, cách nhau bằng dấu phẩy. Cú pháp: 20k/cafe/Cà phê/<tên tắt></div></div>
       <label class="set flat"><span>Ví mặc định khi thêm giao dịch</span><span class="switch"><input type="checkbox" name="md" ${laMacDinh ? 'checked' : ''} aria-label="Ví mặc định"><i></i></span></label>
@@ -63,6 +66,9 @@ export function openWallet(key = '', onSaved = null) {
       ${w && !w.ngoai ? '<button type="button" class="btn danger del" data-del>Xóa ví</button>' : ''}
     </form>`,
     onMount: (b, close) => {
+      const tkDoc = TKU.tkMount(b, w ? (st.isSaving(w) ? w : { ten_vi: w.ten_vi }) : null);
+      const tkHien = () => { b.querySelector('[data-tk]').hidden = !tk(); const sw = b.querySelector('[data-sdwrap]'); if (sw) sw.hidden = !w && tk(); };
+      tkHien();
       const prev = () => { b.querySelector('[data-iconprev]').innerHTML = walletIcon({ ten_vi: b.querySelector('[name=ten]').value || '?', ky_hieu: icon }); };
       b.querySelector('[name=ictext]').addEventListener('input', (e) => { icon = e.target.value.trim(); prev(); });
       b.querySelector('[name=ten]').addEventListener('input', prev);
@@ -79,6 +85,7 @@ export function openWallet(key = '', onSaved = null) {
           nhom = n.dataset.nhom;
           b.querySelectorAll('[data-nhom]').forEach((x) => { x.classList.toggle('on', x === n); x.setAttribute('aria-checked', x === n); });
           b.querySelector('[data-the]').hidden = !the();
+          tkHien();
           b.querySelector('[data-sdhint]').textContent = the() ? 'Dư nợ thẻ trước giao dịch đầu tiên, nhập số âm. Ví dụ đang nợ 1.200.000 thì nhập −1.200.000.' : 'Số tiền có sẵn trong ví trước giao dịch đầu tiên.';
           return;
         }
@@ -96,7 +103,7 @@ export function openWallet(key = '', onSaved = null) {
         e.preventDefault();
         const g = (k) => b.querySelector(`[name=${k}]`).value;
         const ten = U.nfc(g('ten'));
-        const sd = U.parseSignedMoney(g('sd'));
+        const sd = !w && tk() ? 0 : U.parseSignedMoney(g('sd'));
         if (!ten) { tagLoi(b, 'Nhập tên ví.'); return; }
         if (ten === '__new__' || st.walletNames().some((x) => x !== (w && w.ten_vi) && x.toLowerCase() === ten.toLowerCase())) { tagLoi(b, `Đã có ví "${ten}".`); return; }
         if (sd == null) { tagLoi(b, 'Số dư đầu chưa đúng. Ví dụ: 0, 1.500.000, −1.200.000'); return; }
@@ -112,7 +119,15 @@ export function openWallet(key = '', onSaved = null) {
           if (tt < 0 || tt > 100) { tagLoi(b, '% thanh toán tối thiểu từ 0 đến 100.'); return; }
           Object.assign(row, { han_muc: hm, ngay_sao_ke: sk, ngay_den_han: dh, tt_toi_thieu: tt, vi_thanh_toan: g('vt') });
         }
+        let tkv = null;
+        if (tk()) {
+          tkv = tkDoc();
+          if (!tkv) return;
+          if (!tkv._nguon && !w) row.so_du_dau = tkv._goc; // tiền có sẵn → số dư đầu
+          Object.assign(row, tkv);
+        }
         await st.saveAcc(row, w && !w.ngoai ? w.ten_vi : (w ? w.ten_vi : undefined));
+        if (tkv && !w) await TKU.tkAfterCreate(ten, tkv);
         const md = b.querySelector('[name=md]').checked;
         if (md && st.setting('default_account') !== ten) await st.setSetting('default_account', ten);
         toast(w ? 'Đã lưu ví' : 'Đã thêm ví ' + ten);
@@ -584,6 +599,12 @@ export async function manageAct(a, b, ctx) {
   switch (a) {
     case 'w-add': openWallet(); return true;
     case 'w-edit': openWallet(b.dataset.k); return true;
+    // v0.9.0: sổ tiết kiệm + điều chỉnh số dư
+    case 'tk-ok': TKU.quickApply(b.dataset.k); return true;
+    case 'tk-sua': TKU.openEvent(b.dataset.k); return true;
+    case 'tk-settle': TKU.openSettle(b.dataset.k); return true;
+    case 'w-adjust': TKU.openAdjust(b.dataset.k); return true;
+    case 'tk-add': ctx.openAdd({ loai: L.CHUYEN, vi_den: b.dataset.k }); return true;
     case 'card-pay': openAddRef = ctx.openAdd; payCard(b.dataset.k); return true;
     case 'due-paid': payCard(b.dataset.k); return true;
     case 'due-later': snoozeCard(b.dataset.k); toast('Ok, mai nhắc lại'); ctx.render(); return true;

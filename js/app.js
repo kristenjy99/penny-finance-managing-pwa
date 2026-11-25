@@ -11,6 +11,8 @@ import * as SC from './screens.js';
 import { manageAct } from './manage.js';
 import * as LS from './list.js';
 import * as D from './drill.js';
+import * as TK from './tk.js';
+import * as TKU from './tkui.js';
 import { isMoi, applySkin, setSkin, skinContent } from './skin.js';
 
 const $ = (s) => document.querySelector(s);
@@ -310,10 +312,10 @@ function renderContent() {
     if (pc) {
       if (fresh) { c.innerHTML = `${moi ? '<div id="gdband"></div>' : ''}<div class="split"><div id="gdl"></div><aside class="side-panel" id="gdp" aria-label="Thêm / sửa giao dịch"></aside></div>`; panelKey = ''; }
       if (moi) $('#gdband').innerHTML = V.sub === 'thang' && V.route !== 'sua' ? '' : band(monthList());
-      $('#gdl').innerHTML = SC.dueBanner() + pcList(moi);
+      $('#gdl').innerHTML = SC.dueBanner() + TK.banner() + pcList(moi);
       mountPanel();
     } else {
-      c.innerHTML = SC.dueBanner() + mobileGd();
+      c.innerHTML = SC.dueBanner() + TK.banner() + mobileGd();
     }
   } else if (V.route === 'lich') {
     c.innerHTML = band(monthList()) + `<div class="split cal-split"><div>${calendar(true)}</div><aside class="side-panel"><div class="cal-panel">${dayDetail()}</div></aside></div>`;
@@ -577,6 +579,7 @@ async function onAct(b, e) {
     case 'sync': doSync(true, true); break;
     case 'sub': go(b.dataset.sub === 'lich' && isPC() ? '#/lich' : '#/gd' + (b.dataset.sub === 'ngay' ? '' : '/' + b.dataset.sub)); break;
     case 'edit':
+      if (TKU.isAdjust(st.byId(b.dataset.id))) { TKU.openAdjust('', st.byId(b.dataset.id)); break; } // v0.9.0
       if (isPC() && CHI_TIET[V.route]) { openEdit(b.dataset.id); break; } // PC: sửa trong hộp thoại, giữ màn chi tiết
       V.fromList = true; go('#/sua/' + encodeURIComponent(b.dataset.id)); break;
     case 'back':
@@ -586,7 +589,7 @@ async function onAct(b, e) {
     case 'st-open': V.inApp = true; D.DV.year = SC.perRange().from.slice(0, 4); D.DV.sel = ''; go(D.dmHash(SC.SV.stTab === 'thu' ? 'thu' : 'chi', b.dataset.kind, b.dataset.k)); break;
     case 'dm-sel': D.DV.sel = b.dataset.k; render(); break;
     case 'dm-y': D.DV.year = String(+D.DV.year + +b.dataset.d); D.DV.sel = ''; render(); break;
-    case 'w-open': V.inApp = true; go('#/vd/' + encodeURIComponent(b.dataset.k)); break;
+    case 'w-open': V.inApp = true; D.WV.per = st.isSaving(st.S.acc.find((x) => x.ten_vi === b.dataset.k)) ? 'all' : '30'; go('#/vd/' + encodeURIComponent(b.dataset.k)); break;
     case 'vd-per': D.WV.per = b.dataset.v; render(); break;
     case 'day': {
       const d = b.dataset.day;

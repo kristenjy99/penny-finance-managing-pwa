@@ -181,8 +181,8 @@ function assign(cells, cols, grid) {
   return out;
 }
 
-const LOAI_TU = { 'chi': 'chi', 'thu': 'thu', 'chuyen': 'chuyển', 'chuyen khoan': 'chuyển', 'cho vay': 'cho vay', 'di vay': 'đi vay', 'thu no': 'thu nợ', 'tra no': 'trả nợ' };
-const DAU_LOAI = { 'chi': -1, 'thu': 1, 'chuyển': 0, 'cho vay': -1, 'đi vay': 1, 'thu nợ': 1, 'trả nợ': -1 };
+const LOAI_TU = { 'chi': 'chi', 'thu': 'thu', 'chuyen': 'chuyển', 'chuyen khoan': 'chuyển', 'cho vay': 'cho vay', 'di vay': 'đi vay', 'thu no': 'thu nợ', 'tra no': 'trả nợ', 'dieu chinh tang': 'điều chỉnh tăng', 'dieu chinh giam': 'điều chỉnh giảm' };
+const DAU_LOAI = { 'chi': -1, 'thu': 1, 'chuyển': 0, 'cho vay': -1, 'đi vay': 1, 'thu nợ': 1, 'trả nợ': -1, 'điều chỉnh tăng': 1, 'điều chỉnh giảm': -1 };
 const RE_TONG = /^(tong|total|cong phat sinh|cong|so du dau|so du cuoi|opening|closing|beginning|ending|balance brought|so du hien tai|tong cong)/;
 const RE_HONG = /(that bai|failed|da huy|cancel|khong thanh cong|reject|dang xu ly|pending)/;
 const dauTuChu = (s) => {

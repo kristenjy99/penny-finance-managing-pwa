@@ -6,6 +6,7 @@ import * as st from './store.js';
 import { S, L, NHAN, NO_TYPES } from './store.js';
 import { brandMark, isPC } from './ui.js';
 import { walletStats, compact } from './chart.js';
+import * as TK from './tk.js';
 
 // Trạng thái riêng của các màn này
 export const SV = { stTab: 'chi', person: '', per: 'thang', anchor: '', open: '' };
@@ -54,6 +55,7 @@ export function snoozeCard(ten) {
   localStorage.setItem(NHAC_KEY, JSON.stringify(bo));
 }
 export function dueBanner() {
+  // v0.9.0: kèm sổ tiết kiệm đến ngày trả lãi / đến hạn (ở tab Ví banner sổ nằm dưới dải tổng)
   return dueCards().map(({ a, i }) => {
     const khi = i.conNgay === 1 ? 'ngày mai' : i.conNgay === 0 ? 'hôm nay' : `đã quá hạn ${-i.conNgay} ngày`;
     return `<div class="duebar" role="alert"><span class="av" aria-hidden="true">${walletIcon(a)}</span>
@@ -287,6 +289,22 @@ export function cardLine(w, pc) {
   return pc ? `<div class="tr sub">${body}</div>` : `<div class="cardline">${body}</div>`;
 }
 
+// v0.9.0: dòng phụ của sổ tiết kiệm (lãi suất, đến hạn, thanh tiến độ kỳ hạn, lãi tạm tính, nút Gửi thêm)
+export function tkLine(w, pc) {
+  const i = TK.info(w);
+  const dh = i.ky ? (i.conNgay > 0 ? `đến hạn ${U.dmy(i.den)} · còn ${i.conNgay} ngày` : `đã đến hạn ${U.dmy(i.den)}`) : 'không kỳ hạn';
+  const l1 = `${TK.fmtR(i.r)}%/năm · ${TK.kyLabel(i.ky)} · ${dh}${st.isHidden(w) ? ' · <span class="tag">ngoài tổng</span>' : ''}`;
+  const bar = i.ky ? `<div class="bar" role="progressbar" aria-valuenow="${i.pct}" aria-label="Đã qua ${i.pct}% kỳ hạn sổ ${esc(w.ten_vi)}"><i style="width:${i.pct}%"></i></div>` : '';
+  const body = `<div class="cl"><div class="cl1">${l1}</div>${bar}<div class="cl3"><div class="cl2">Lãi tạm tính <b class="num inc">+${num(i.laiTam)}</b></div><button class="btn sm" data-act="tk-add" data-k="${esc(w.ten_vi)}">Gửi thêm</button></div></div>`;
+  return pc ? `<div class="tr sub">${body}</div>` : `<div class="cardline">${body}</div>`;
+}
+// Sổ đã tất toán: gom vào một mục thu gọn
+function tkDone(pc) {
+  const ds = st.wallets(S.month).filter((w) => st.isClosed(w));
+  if (!ds.length) return '';
+  return `<details class="tkdone"><summary>Sổ tiết kiệm đã tất toán (${ds.length})</summary>${ds.map((w) => `<button class="row" data-act="w-open" data-k="${esc(w.ten_vi)}"><span class="av" aria-hidden="true">${walletIcon(w)}</span><span class="mid"><span class="t1">${esc(w.ten_vi)}</span><span class="t2">Đã tất toán</span></span><span class="amt num">${net(w.bal)}</span></button>`).join('')}</details>`;
+}
+
 // Dải tổng số dư theo từng nhóm ví (Tiền mặt / Ví điện tử / Ngân hàng / Thẻ tín dụng)
 function groupBand(gs) {
   if (gs.length < 2) return '';
@@ -294,7 +312,7 @@ function groupBand(gs) {
 }
 
 export function walletGroups() {
-  const ws = st.wallets(S.month);
+  const ws = st.wallets(S.month).filter((w) => !st.isClosed(w));
   const order = st.NHOM_VI.slice();
   ws.forEach((w) => { if (!order.includes(w.nhom || 'Khác')) order.push(w.nhom || 'Khác'); });
   return order.map((g) => ({ nhom: g, ws: ws.filter((w) => (w.nhom || 'Khác') === g) })).filter((g) => g.ws.length);
@@ -317,13 +335,13 @@ export function walletsHtml(pc) {
   if (!pc) {
     // v0.8.0: ví dạng thẻ gọn theo nhóm; bấm thẻ → màn chi tiết ví, nút ✎ → sửa ví
     const list = gs.map((g) => `<div class="wgrid"><div class="wgh"><span>${esc(g.nhom)}</span><span class="r num">${net(U.sum(g.ws, (w) => w.bal))}</span></div>`
-      + g.ws.map((w) => `<div class="wcard${w.nhom === st.NHOM_THE ? ' wide' : ''}"><button class="wmain" data-act="w-open" data-k="${esc(w.ten_vi)}" title="Tháng ${U.monthLabel(S.month)}: thu ${num(w.thu)} · chi ${num(w.chi)}">
+      + g.ws.map((w) => `<div class="wcard${w.nhom === st.NHOM_THE || w.nhom === st.NHOM_TK ? ' wide' : ''}"><button class="wmain" data-act="w-open" data-k="${esc(w.ten_vi)}" title="Tháng ${U.monthLabel(S.month)}: thu ${num(w.thu)} · chi ${num(w.chi)}">
         <span class="av" aria-hidden="true">${walletIcon(w)}</span>
         <span class="wn">${esc(w.ten_vi)}${st.defaultAccount() === w.ten_vi ? ' <span class="tag">mặc định</span>' : ''}</span>
-        <b class="wb num ${balC(w.bal)}">${net(w.bal)}</b><small class="wt num">Thu ${compact(w.thu)} · Chi ${compact(w.chi)}</small></button>
-        <button class="wed" data-act="w-edit" data-k="${esc(w.ten_vi)}" aria-label="Sửa ví ${esc(w.ten_vi)}">✎</button>${w.nhom === st.NHOM_THE ? cardLine(w, false) : ''}</div>`).join('') + '</div>').join('');
+        <b class="wb num ${balC(w.bal)}">${net(w.bal)}</b>${w.nhom === st.NHOM_TK ? '' : `<small class="wt num">Thu ${compact(w.thu)} · Chi ${compact(w.chi)}</small>`}</button>
+        <button class="wed" data-act="w-edit" data-k="${esc(w.ten_vi)}" aria-label="Sửa ví ${esc(w.ten_vi)}">✎</button>${w.nhom === st.NHOM_THE ? cardLine(w, false) : w.nhom === st.NHOM_TK ? tkLine(w, false) : ''}</div>`).join('') + '</div>').join('') + tkDone(false);
     const btns = `<div class="btns pad"><button class="btn" data-act="transfer">Chuyển khoản</button><button class="btn pri" data-act="w-add">+ Thêm ví</button></div>`;
-    const head = bandOf([{ lb: 'Tổng thu', vl: plus(tt.thu), c: 'inc' }, { lb: 'Tổng chi', vl: minus(tt.chi), c: 'exp' }]) + groupBand(gs);
+    const head = bandOf([{ lb: 'Tổng thu', vl: plus(tt.thu), c: 'inc' }, { lb: 'Tổng chi', vl: minus(tt.chi), c: 'exp' }]) + groupBand(gs) + TK.banner();
     const vis = list || '<div class="empty">Chưa có ví nào.</div>';
     // PC (mẫu mới): thẻ ví bên trái, thống kê 6 tháng bên phải
     if (isPC()) return head + `<div class="vgrid"><div class="vgl">${vis}${btns}</div><div class="vgr">${walletStats('', true)}</div></div>` + netNote(nw);
@@ -332,12 +350,12 @@ export function walletsHtml(pc) {
   const all = gs.flatMap((g) => g.ws);
   const rows = all.map((w) => `<button class="tr" data-act="w-open" data-k="${esc(w.ten_vi)}">
       <span class="b wname"><span class="av xs" aria-hidden="true">${walletIcon(w)}</span>${esc(w.ten_vi)}${st.defaultAccount() === w.ten_vi ? ' <span class="tag">mặc định</span>' : ''}</span><span>${esc(w.nhom || 'Khác')}</span>
-      <span class="r num">${num(w.thu)}</span><span class="r num">${num(w.chi)}</span><span class="r num b ${balC(w.bal)}">${net(w.bal)}</span></button>` + (w.nhom === st.NHOM_THE ? cardLine(w, true) : '')).join('');
+      <span class="r num">${num(w.thu)}</span><span class="r num">${num(w.chi)}</span><span class="r num b ${balC(w.bal)}">${net(w.bal)}</span></button>` + (w.nhom === st.NHOM_THE ? cardLine(w, true) : w.nhom === st.NHOM_TK ? tkLine(w, true) : '')).join('');
   return bandOf([{ lb: 'Tổng số dư', vl: net(nw.total) + ' đ', c: nw.total < 0 ? 'exp' : '' }, { lb: 'Tài sản', vl: num(nw.assets) }, { lb: 'Nợ', vl: minus(nw.liab), c: 'exp' },
     { lb: 'Tổng thu', vl: plus(tt.thu), c: 'inc' }, { lb: 'Tổng chi', vl: minus(tt.chi), c: 'exp' }])
-    + groupBand(gs)
+    + groupBand(gs) + TK.banner()
     + `<div class="vgrid"><div class="vgl"><div class="tbl wtbl"><div class="th"><span>Ví</span><span>Nhóm</span><span class="r">Thu</span><span class="r">Chi</span><span class="r">Số dư</span></div>${rows}
-      <div class="tr tot"><span>Tổng cộng</span><span></span><span class="r num">${num(U.sum(all, (w) => w.thu))}</span><span class="r num">${num(U.sum(all, (w) => w.chi))}</span><span class="r num ${balC(nw.total)}">${net(nw.total)}</span></div></div></div><div class="vgr">${walletStats('', true)}</div></div>`
+      <div class="tr tot"><span>Tổng cộng</span><span></span><span class="r num">${num(U.sum(all, (w) => w.thu))}</span><span class="r num">${num(U.sum(all, (w) => w.chi))}</span><span class="r num ${balC(nw.total)}">${net(nw.total)}</span></div></div>${tkDone(true)}</div><div class="vgr">${walletStats('', true)}</div></div>`
     + netNote(nw);
 }
 

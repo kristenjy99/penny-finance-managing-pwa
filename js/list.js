@@ -3,7 +3,7 @@
 import * as U from './util.js';
 import { esc, num, MINUS } from './util.js';
 import * as st from './store.js';
-import { L, DAU, NO_TYPES, NHAN } from './store.js';
+import { L, DAU, NO_TYPES, NHAN, DC_TYPES } from './store.js';
 
 const THU7 = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 const signed = (n) => (n > 0 ? '+' : n < 0 ? MINUS : '') + num(n);
@@ -24,6 +24,11 @@ export function rowHtml(t, o = {}) {
     t1 = 'Chuyển khoản';
     t2 = `${t.vi || '?'} → ${t.vi_den || '?'}` + (note ? ' · ' + note : '');
     if (o.w) { const f = flowOf(t, o.w); amt = signed(f); c = f > 0 ? 'inc' : 'exp'; } else { amt = num(t.so_tien); c = 'neu'; }
+  } else if (DC_TYPES.includes(t.loai)) {
+    // v0.9.0: điều chỉnh số dư không tính vào thống kê
+    t1 = 'Điều chỉnh số dư';
+    t2 = (note && note !== 'Điều chỉnh số dư' ? note : 'không tính vào thống kê') + (o.pc && t.vi && !o.w ? ' · ' + t.vi : '');
+    amt = (DAU[t.loai] > 0 ? '+' : MINUS) + num(t.so_tien); c = o.w ? (DAU[t.loai] > 0 ? 'inc' : 'exp') : 'neu';
   } else if (NO_TYPES.includes(t.loai)) {
     t1 = NHAN[t.loai] + (t.nguoi ? ' · ' + t.nguoi : '');
     t2 = note + (o.pc && t.vi && !o.w ? (note ? ' · ' : '') + t.vi : '');

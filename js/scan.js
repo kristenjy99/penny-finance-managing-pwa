@@ -12,11 +12,25 @@ import { readDoc, kindOf, KIND_LABEL, endOcr, fileDate } from './docread.js';
 
 export const NGUON_SK = 'sao kê';
 const ACCEPT = '.csv,.tsv,.txt,.xlsx,.xls,.pdf,image/*,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-const NHAN_LOAI = { 'chi': 'Chi', 'thu': 'Thu', 'chuyển': 'Chuyển', 'cho vay': 'Cho vay', 'đi vay': 'Đi vay', 'thu nợ': 'Thu nợ', 'trả nợ': 'Trả nợ' };
+const NHAN_LOAI = { 'chi': 'Chi', 'thu': 'Thu', 'chuyển': 'Chuyển', 'cho vay': 'Cho vay', 'đi vay': 'Đi vay', 'thu nợ': 'Thu nợ', 'trả nợ': 'Trả nợ', 'điều chỉnh tăng': 'Điều chỉnh tăng', 'điều chỉnh giảm': 'Điều chỉnh giảm' };
 const STOP = new Set(['thanh', 'toan', 'chuyen', 'tien', 'khoan', 'giao', 'dich', 'nhan', 'from', 'payment']);
 const tu = (s) => U.boDau(s).split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !STOP.has(w));
 const giong = (a, b) => { const x = tu(a); return tu(b).some((w) => x.includes(w)); };
 const accOf = (ten) => S.acc.find((a) => a.ten_vi === ten);
+// v0.9.0: ví khác được nhắc tới trong ghi chú (nạp / rút / gửi tiết kiệm giữa các ví của mình) → gợi ý chuyển khoản
+export function walletInNote(note, tru) {
+  const n = ' ' + U.boDau(note).replace(/[^a-z0-9]+/g, ' ') + ' ';
+  const gon = n.replace(/ /g, '');
+  const ds = st.walletNames().filter((x) => x !== tru);
+  for (const ten of ds) {
+    const a = accOf(ten) || {};
+    const k = U.boDau(ten).replace(/[^a-z0-9]+/g, '');
+    if (k.length >= 4 && !/^(tienmat|cash|vidientu|nganhang)$/.test(k) && gon.includes(k)) return ten;
+    const tat = String(a.viet_tat || '').split(/\s*,\s*/).map((x) => U.boDau(x).trim()).filter((x) => x.length >= 3);
+    if (tat.some((x) => n.includes(' ' + x + ' '))) return ten;
+  }
+  return '';
+}
 
 /** Ví đề xuất theo ngân hàng nhận ra từ file (sao kê thẻ ưu tiên ví nhóm Thẻ tín dụng) */
 export function suggestWallet(bank, card) {
@@ -60,11 +74,15 @@ export function mountScan(el, { onDone = () => {} } = {}) {
     const card = accOf(V.vi);
     const traThe = card && st.isCard(card) && card.vi_thanh_toan && card.vi_thanh_toan !== V.vi ? card.vi_thanh_toan : '';
     V.rows.forEach((r) => {
-      if (r.loaiFile) { r.loai = r.userLoai || r.loaiFile; r.vi = r.fileVi || V.vi; r.vi_den = r.loai === L.CHUYEN ? r.fileViDen : ''; }
+      if (r.loaiFile && !(r.ckTay && r.ck)) { r.loai = r.userLoai || r.loaiFile; r.vi = r.fileVi || V.vi; r.vi_den = r.loai === L.CHUYEN ? r.fileViDen : ''; }
       else {
-        r.loai = r.userLoai || (r.sign > 0 ? L.THU : L.CHI);
-        if (!r.userLoai && r.loai === L.THU && traThe) r.loai = L.CHUYEN;
-        if (r.loai === L.CHUYEN) { r.vi = traThe || r.vi || ''; r.vi_den = V.vi; } else { r.vi = V.vi; r.vi_den = ''; }
+        // Gợi ý chuyển khoản khi ghi chú nhắc tên ví khác (chưa sửa tay)
+        if (!r.userLoai && !r.ckTay) { const k = walletInNote(r.ghi_chu, V.vi); r.ck = k; r.ckGoiY = !!k; }
+        if (r.ck && (r.ck === V.vi || !st.walletNames().includes(r.ck))) r.ck = '';
+        r.loai = r.ck ? L.CHUYEN : r.userLoai || (r.sign > 0 ? L.THU : L.CHI);
+        if (!r.ck && !r.userLoai && r.loai === L.THU && traThe) r.loai = L.CHUYEN;
+        if (r.ck) { if (r.sign < 0) { r.vi = V.vi; r.vi_den = r.ck; } else { r.vi = r.ck; r.vi_den = V.vi; } }
+        else if (r.loai === L.CHUYEN) { r.vi = traThe || r.vi || ''; r.vi_den = V.vi; } else { r.vi = V.vi; r.vi_den = ''; }
       }
       phanLoai(r);
     });
@@ -149,6 +167,7 @@ export function mountScan(el, { onDone = () => {} } = {}) {
     return `Đọc ngoại tuyến trên thiết bị · ${V.rows.length} khoản` + (canChon() ? ` · ${canChon()} cần chọn danh mục` : '') + (dup ? ` · ${dup} có thể trùng` : '');
   }
   function catText(r, ngan) {
+    if (r.loai === L.CHUYEN && r.ck) return r.sign < 0 ? `⇄ Chuyển sang ${esc(r.ck)}` : `⇄ Nhận từ ${esc(r.ck)}`;
     if (r.loai === L.CHUYEN) return r.vi ? `Chuyển từ ${esc(r.vi)}` : '<span class="exp">Chọn ví trả thẻ</span>';
     if (NO_TYPES.includes(r.loai)) return `${esc(NHAN_LOAI[r.loai])} · ${esc(r.nguoi)}`;
     if (r.tt === 'chon') return 'Chưa phân loại — chọn';
@@ -156,8 +175,8 @@ export function mountScan(el, { onDone = () => {} } = {}) {
     if (ngan) return ten;
     return r.tt === 'auto' ? `${ten} <span class="auto">· tự động</span>` : r.tt === 'goiy' ? `${ten} <span class="auto">· gợi ý</span>` : ten;
   }
-  const ttText = (r) => (r.dup ? 'Có thể trùng' : r.loai === L.CHUYEN ? 'Thanh toán thẻ' : r.tt === 'chon' ? 'Cần chọn' : r.tt === 'goiy' ? 'Gợi ý' : r.tt === 'tay' ? 'Đã chọn' : r.tt === 'file' ? 'Từ file' : NO_TYPES.includes(r.loai) ? 'Công nợ' : 'Tự động');
-  const amt = (r) => { const s = r.loai === L.CHUYEN ? 1 : (st.DAU[r.loai] || r.sign); return `<span class="num ${s > 0 ? 'inc' : 'exp'}">${s > 0 ? '+' : U.MINUS}${num(r.so_tien)}</span>`; };
+  const ttText = (r) => (r.dup ? 'Có thể trùng' : r.loai === L.CHUYEN && r.ck ? (r.ckGoiY ? 'Gợi ý chuyển khoản' : 'Chuyển khoản') : r.loai === L.CHUYEN ? 'Thanh toán thẻ' : r.tt === 'chon' ? 'Cần chọn' : r.tt === 'goiy' ? 'Gợi ý' : r.tt === 'tay' ? 'Đã chọn' : r.tt === 'file' ? 'Từ file' : NO_TYPES.includes(r.loai) ? 'Công nợ' : 'Tự động');
+  const amt = (r) => { const s = r.loai === L.CHUYEN ? (r.vi_den === V.vi ? 1 : -1) : (st.DAU[r.loai] || r.sign); return `<span class="num ${s > 0 ? 'inc' : 'exp'}">${s > 0 ? '+' : U.MINUS}${num(r.so_tien)}</span>`; };
   const ck = (r) => `<button type="button" class="sc-ck ${r.on ? 'on' : ''}" role="checkbox" aria-checked="${r.on}" aria-label="Chọn ${esc(r.ghi_chu)}" data-ck="${r.k}">${r.on ? '✓' : ''}</button>`;
   const canPick = (r) => r.loai === L.CHI || r.loai === L.THU;
   const catBtn = (r, cls) => canPick(r) ? `<button type="button" class="${cls}" data-cat="${r.k}"><span>${catText(r, pc)}</span><i aria-hidden="true">▾</i></button>` : `<span class="${cls} ro">${catText(r, pc)}</span>`;
@@ -179,6 +198,8 @@ export function mountScan(el, { onDone = () => {} } = {}) {
     if (V.card && !(a && st.isCard(a))) h.push('File có vẻ là sao kê thẻ tín dụng: nên chọn ví nhóm Thẻ tín dụng.');
     if (a && st.isCard(a) && !a.vi_thanh_toan && V.rows.some((r) => r.sign > 0 && !r.loaiFile)) h.push('Thẻ chưa đặt ví thanh toán nên tiền vào thẻ được ghi là Thu (dư nợ giảm).');
     if (V.rows.some((r) => r.doan && r.on)) h.push('Một số khoản không ghi rõ chi hay thu, đã đoán là chi: chạm vào dòng để sửa.');
+    const goiY = V.rows.filter((r) => r.ck && r.ckGoiY).length;
+    h.push((goiY ? `${goiY} khoản có tên ví khác trong ghi chú nên được gợi ý là chuyển khoản (kiểm tra lại). ` : '') + 'Khoản chuyển giữa các ví của bạn (nạp ví, gửi tiết kiệm…): chạm vào ngày của dòng → Chuyển khoản → chọn ví.');
     return h.length ? `<div class="sc-hint">${h.join('<br>')}</div>` : '';
   };
 
@@ -209,7 +230,7 @@ export function mountScan(el, { onDone = () => {} } = {}) {
     const list = V.rows && V.rows.length ? `<div class="sc-vrow"><span class="lbl">Lưu vào ví</span>${walletSel('sc-sel')}</div>${refHtml()}${hintHtml()}
       <div class="sc-list">${V.rows.map((r) => `<div class="sc-r ${r.on ? '' : 'off'}" data-row="${r.k}">${ck(r)}
         <div class="sc-m"><button type="button" class="sc-t" data-ed="${r.k}"><span class="sc-n">${esc(r.ghi_chu)}</span>${amt(r)}</button>
-          <div class="sc-d">${U.dmy(r.ngay)}${r.dup ? ' <span class="tag">Có thể trùng</span>' : ''}${r.loai === L.CHUYEN ? ' <span class="tag">Thanh toán thẻ</span>' : ''}</div>
+          <div class="sc-d">${U.dmy(r.ngay)}${r.dup ? ' <span class="tag">Có thể trùng</span>' : ''}${r.loai === L.CHUYEN ? ` <span class="tag">${r.ck ? (r.ckGoiY ? 'Gợi ý chuyển khoản' : 'Chuyển khoản') : 'Thanh toán thẻ'}</span>` : ''}</div>
           ${catBtn(r, 'sc-cat' + (r.tt === 'chon' ? ' need' : ''))}</div></div>`).join('')}</div>
       <p class="sc-note">Khoản khớp từ khóa được phân loại tự động. Bạn có thể đổi danh mục của bất kỳ khoản nào trước khi lưu.${V.rows.some((r) => r.dup) ? ' Khoản "Có thể trùng" đã có trong Penny nên được bỏ chọn sẵn.' : ''}</p>
       <div class="sc-foot btns"><button type="button" class="btn" data-all>${n === V.rows.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}</button><button type="button" class="btn pri" data-save ${n && !V.busy ? '' : 'disabled'}>Lưu ${n} giao dịch</button></div>` : '';
@@ -219,22 +240,38 @@ export function mountScan(el, { onDone = () => {} } = {}) {
   // ---------- Sửa một dòng ----------
   function editRow(r) {
     const a = accOf(V.vi);
-    const loais = r.loaiFile && !['chi', 'thu'].includes(r.loaiFile) ? [r.loaiFile] : [L.CHI, L.THU].concat(a && st.isCard(a) && a.vi_thanh_toan ? [L.CHUYEN] : []);
-    let loai = r.loai;
+    const traThe = a && st.isCard(a) && a.vi_thanh_toan;
+    const loais = r.loaiFile && !['chi', 'thu'].includes(r.loaiFile) ? [r.loaiFile] : [L.CHI, L.THU, 'ck'].concat(traThe ? [L.CHUYEN] : []);
+    let loai = r.ck ? 'ck' : r.loai;
+    let chieu = r.sign < 0 ? -1 : 1;
+    const viKhac = st.walletNames().filter((x) => x !== V.vi);
+    const nhanL = (l) => (l === 'ck' ? 'Chuyển khoản' : l === L.CHUYEN ? 'Trả thẻ' : NHAN_LOAI[l]);
     openSheet({
       title: 'Sửa khoản', cls: 'narrow',
       body: `<form class="txf" data-er novalidate>
-        <div class="seg lg" role="radiogroup">${loais.map((l) => `<button type="button" role="radio" data-l="${l}" class="${l === loai ? 'on' : ''}" aria-checked="${l === loai}">${l === L.CHUYEN ? 'Trả thẻ' : NHAN_LOAI[l]}</button>`).join('')}</div>
+        <div class="seg lg" role="radiogroup">${loais.map((l) => `<button type="button" role="radio" data-l="${l}" class="${l === loai ? 'on' : ''}" aria-checked="${l === loai}">${nhanL(l)}</button>`).join('')}</div>
+        <div data-ckw ${loai === 'ck' ? '' : 'hidden'}>
+          <div class="seg" role="radiogroup" style="margin:10px 0 0">${[[-1, 'Chuyển đi từ ' + V.vi], [1, 'Nhận về ' + V.vi]].map(([v, t]) => `<button type="button" role="radio" data-ch="${v}" class="${chieu === v ? 'on' : ''}" aria-checked="${chieu === v}">${esc(t)}</button>`).join('')}</div>
+          <div class="fld" style="margin-top:10px"><label for="er-vk" data-vkl>${chieu < 0 ? 'Sang ví' : 'Từ ví'}</label><select class="inp" id="er-vk" name="vk">${viKhac.map((x) => `<option ${x === r.ck ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>
+            <div class="hint">Dùng cho tiền nạp / rút / gửi tiết kiệm giữa các ví của bạn: không tính vào thu chi.</div></div></div>
         <div class="fld"><label>Số tiền</label><input class="inp" name="amt" value="${num(r.so_tien)} đ" autocomplete="off"></div>
         <div class="fld"><label>Ghi chú</label><input class="inp" name="note" value="${esc(r.ghi_chu)}" autocomplete="off"></div>
         <div class="fld"><label>Ngày</label><input class="inp" type="date" name="ngay" value="${r.ngay}"></div>
         <div class="btns"><button type="button" class="btn" data-x>Hủy</button><button class="btn pri">Xong</button></div></form>`,
       onMount: (b, close) => {
         b.addEventListener('click', (e) => {
+          const c = e.target.closest('[data-ch]');
+          if (c) {
+            chieu = +c.dataset.ch;
+            b.querySelectorAll('[data-ch]').forEach((y) => { y.classList.toggle('on', y === c); y.setAttribute('aria-checked', y === c); });
+            b.querySelector('[data-vkl]').textContent = chieu < 0 ? 'Sang ví' : 'Từ ví';
+            return;
+          }
           const x = e.target.closest('[data-l]');
           if (!x) return;
           loai = x.dataset.l;
           b.querySelectorAll('[data-l]').forEach((y) => { y.classList.toggle('on', y === x); y.setAttribute('aria-checked', y === x); });
+          b.querySelector('[data-ckw]').hidden = loai !== 'ck';
         });
         b.querySelector('[data-er]').addEventListener('submit', (e) => {
           e.preventDefault();
@@ -243,9 +280,16 @@ export function mountScan(el, { onDone = () => {} } = {}) {
           if (!so || !/^\d{4}-\d{2}-\d{2}$/.test(ngay)) { toast(!so ? 'Số tiền chưa đúng' : 'Ngày chưa đúng'); return; }
           const note = U.nfc(b.querySelector('[name=note]').value);
           if (note !== r.ghi_chu && r.tt !== 'tay') r.tt = '';
-          if (loai !== r.loai) { r.userLoai = loai; if (r.tt === 'tay') r.tt = ''; }
+          if (loai === 'ck') {
+            const vk = b.querySelector('[name=vk]').value;
+            if (!vk) { toast('Chọn ví kia của khoản chuyển'); return; }
+            r.ck = vk; r.ckGoiY = false; r.ckTay = true; r.userLoai = L.CHUYEN; r.sign = chieu;
+          } else {
+            if (r.ck) { r.ck = ''; r.ckTay = true; }
+            if (loai !== r.loai) { r.userLoai = loai; if (r.tt === 'tay') r.tt = ''; }
+            r.sign = loai === L.CHI ? -1 : 1;
+          }
           r.so_tien = so; r.ngay = ngay; r.ghi_chu = note; r.doan = false;
-          r.sign = loai === L.CHI ? -1 : 1;
           applyAll(); draw(); close();
         });
       }
@@ -292,6 +336,7 @@ export function mountScan(el, { onDone = () => {} } = {}) {
     if (b.dataset.ed != null) { editRow(row(b.dataset.ed)); return; }
     if (b.dataset.cat != null) {
       const r = row(b.dataset.cat);
+      if (r.loai === L.CHUYEN) { editRow(r); return; }
       const kq = await pickCategory({ loai: r.loai, note: r.ghi_chu, value: r.tt === 'chon' ? '' : r.cat });
       if (!kq) return;
       r.cat = kq.v; r.tt = 'tay'; r.on = true; r.touched = true;

@@ -5,13 +5,19 @@ import { boDau, nfc, chuanCoDau, chuanKhongDau, nowIso, uid, ym, thisMonth, sum,
 import { setBrandIcon } from './ui.js';
 
 // Loại giao dịch: dùng đúng chuỗi bot ghi trong Sheet
-export const L = { CHI: 'chi', THU: 'thu', CHUYEN: 'chuyển', CHO_VAY: 'cho vay', DI_VAY: 'đi vay', THU_NO: 'thu nợ', TRA_NO: 'trả nợ' };
-export const NHAN = { 'chi': 'Chi', 'thu': 'Thu', 'chuyển': 'Chuyển khoản', 'cho vay': 'Cho vay', 'đi vay': 'Đi vay', 'thu nợ': 'Thu nợ', 'trả nợ': 'Trả nợ' };
+export const L = { CHI: 'chi', THU: 'thu', CHUYEN: 'chuyển', CHO_VAY: 'cho vay', DI_VAY: 'đi vay', THU_NO: 'thu nợ', TRA_NO: 'trả nợ', DC_TANG: 'điều chỉnh tăng', DC_GIAM: 'điều chỉnh giảm' };
+export const NHAN = { 'chi': 'Chi', 'thu': 'Thu', 'chuyển': 'Chuyển khoản', 'cho vay': 'Cho vay', 'đi vay': 'Đi vay', 'thu nợ': 'Thu nợ', 'trả nợ': 'Trả nợ', 'điều chỉnh tăng': 'Điều chỉnh tăng', 'điều chỉnh giảm': 'Điều chỉnh giảm' };
 // Chiều tiền với ví: -1 tiền ra, +1 tiền vào
-export const DAU = { 'chi': -1, 'thu': 1, 'chuyển': 0, 'cho vay': -1, 'đi vay': 1, 'thu nợ': 1, 'trả nợ': -1 };
+export const DAU = { 'chi': -1, 'thu': 1, 'chuyển': 0, 'cho vay': -1, 'đi vay': 1, 'thu nợ': 1, 'trả nợ': -1, 'điều chỉnh tăng': 1, 'điều chỉnh giảm': -1 };
+// v0.9.0: điều chỉnh số dư KHÔNG tính vào thống kê (chỉ đổi số dư ví); loại tính vào thống kê dùng thu/chi + danh mục Điều chỉnh tăng/giảm
+export const DC_TYPES = [L.DC_TANG, L.DC_GIAM];
+export const DM_DC_TANG = 'Điều chỉnh tăng', DM_DC_GIAM = 'Điều chỉnh giảm', NHOM_DC = 'Điều chỉnh số dư';
 export const NO_TYPES = [L.CHO_VAY, L.DI_VAY, L.THU_NO, L.TRA_NO];
-export const NHOM_VI = ['Tiền mặt', 'Ví điện tử', 'Ngân hàng', 'Thẻ tín dụng'];
+export const NHOM_VI = ['Tiền mặt', 'Ví điện tử', 'Ngân hàng', 'Thẻ tín dụng', 'Tiết kiệm'];
 export const NHOM_THE = 'Thẻ tín dụng';
+export const NHOM_TK = 'Tiết kiệm';
+// Cột riêng của sổ tiết kiệm (sheet Accounts, chỉ thêm khi có sổ)
+export const TK_COT = ['tk_ngay_gui', 'tk_ky_han', 'tk_lai_suat', 'tk_lai_kkh', 'tk_tra_lai', 'tk_dao_han', 'tk_vi_nhan', 'tk_an', 'tk_trang_thai', 'tk_da_tra'];
 // Nhóm ví hiển thị: nhóm cũ "Tiền mặt & ví điện tử" (trước 0.5.1) tách theo tên ví
 export function accGroup(a) {
   const n = nfc(a.nhom);
@@ -19,6 +25,9 @@ export function accGroup(a) {
   return n || 'Khác';
 }
 export const isCard = (a) => accGroup(a) === NHOM_THE;
+export const isSaving = (a) => !!a && accGroup(a) === NHOM_TK;
+export const isClosed = (a) => isSaving(a) && a.tk_trang_thai === 'tat_toan';
+export const isHidden = (a) => isSaving(a) && (a.tk_an === '1' || a.tk_an === true || isClosed(a)); // không tính vào tổng tài sản
 export const DM_CHUA = 'Chưa phân loại';
 export const DM_THU_KHAC = 'Thu nhập khác';
 
@@ -217,8 +226,25 @@ export async function saveAcc(row, oldKey) {
     Object.assign(row, { han_muc: Math.round(Math.abs(Number(r0.han_muc) || 0)), ngay_sao_ke: ngay(r0.ngay_sao_ke), ngay_den_han: ngay(r0.ngay_den_han),
       tt_toi_thieu: Math.min(100, Math.max(0, Number(r0.tt_toi_thieu) || 0)), vi_thanh_toan: nfc(r0.vi_thanh_toan) });
   }
+  // Sổ tiết kiệm (v0.9.0)
+  if (row.nhom === NHOM_TK) {
+    const so = (v, d = 0) => { const n = Number(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) && n >= 0 ? n : d; };
+    Object.assign(row, {
+      tk_ngay_gui: /^\d{4}-\d{2}-\d{2}$/.test(r0.tk_ngay_gui || '') ? r0.tk_ngay_gui : today(),
+      tk_ky_han: Math.round(so(r0.tk_ky_han)), tk_lai_suat: so(r0.tk_lai_suat), tk_lai_kkh: so(r0.tk_lai_kkh, 0.1),
+      tk_tra_lai: ['cuoi_ky', 'hang_thang', 'dau_ky'].includes(r0.tk_tra_lai) ? r0.tk_tra_lai : 'cuoi_ky',
+      tk_dao_han: ['goc_lai', 'goc', 'tat_toan'].includes(r0.tk_dao_han) ? r0.tk_dao_han : 'goc_lai',
+      tk_vi_nhan: nfc(r0.tk_vi_nhan), tk_an: r0.tk_an ? '1' : '', tk_trang_thai: r0.tk_trang_thai === 'tat_toan' ? 'tat_toan' : '',
+      tk_da_tra: /^\d{4}-\d{2}-\d{2}$/.test(r0.tk_da_tra || '') ? r0.tk_da_tra : ''
+    });
+  }
   if (oldKey && oldKey !== row.ten_vi) {
     await renameInTx('vi', oldKey, row.ten_vi); await renameInTx('vi_den', oldKey, row.ten_vi);
+    S.acc.forEach((a) => { if (a.tk_vi_nhan === oldKey) a.tk_vi_nhan = row.ten_vi; });
+    // ghi chú tiền lãi "Lãi tiết kiệm · <tên sổ>" đổi theo tên sổ
+    const cuNote = 'Lãi tiết kiệm · ' + oldKey;
+    const ch = S.tx.filter((t) => t.ghi_chu.startsWith(cuNote));
+    for (const t of ch) await saveTx({ ...t, ghi_chu: 'Lãi tiết kiệm · ' + row.ten_vi + t.ghi_chu.slice(cuNote.length) });
     if (setting('default_account') === oldKey) S.set.default_account = row.ten_vi;
     S.acc.forEach((a) => { if (a.vi_thanh_toan === oldKey) a.vi_thanh_toan = row.ten_vi; });
   }
@@ -327,6 +353,7 @@ export const groupOf = (name) => { const c = catOf(name); return c ? c.nhom || '
 export const symbolOf = (t) => {
   if (NO_TYPES.includes(t.loai)) return (t.nguoi || '?').charAt(0).toUpperCase();
   if (t.loai === L.CHUYEN) return '⇄';
+  if (DC_TYPES.includes(t.loai)) return '⚖';
   const c = catOf(t.danh_muc);
   return (c && c.ky_hieu) || (t.danh_muc || t.ghi_chu || '?').charAt(0).toUpperCase();
 };
@@ -542,7 +569,8 @@ export function suggestCats(q, note, loai) {
 
 /** Tài sản, nợ, phải thu, phải trả, vốn ròng tính tới hết tháng k */
 export function netWorth(k = S.month) {
-  const ws = wallets(k);
+  const an = new Set(S.acc.filter(isHidden).map((a) => a.ten_vi));
+  const ws = wallets(k).filter((w) => !an.has(w.ten_vi));
   const assets = sum(ws.filter((w) => w.bal > 0), (w) => w.bal);
   const liab = sum(ws.filter((w) => w.bal < 0), (w) => -w.bal);
   const ds = debts(k);
@@ -578,5 +606,16 @@ export function budgets(k = S.month) {
 export const level = (r) => (r > 1 ? 'over' : r >= 0.8 ? 'mid' : '');
 
 // Ví đã biết (Accounts + tên xuất hiện trong giao dịch)
-export const walletNames = () => wallets('').map((w) => w.ten_vi);
+export const walletNames = () => wallets('').filter((w) => !isClosed(w)).map((w) => w.ten_vi);
+/** Số dư một ví tới hết ngày d (yyyy-mm-dd) */
+export function balanceAt(name, d) {
+  const a = S.acc.find((x) => x.ten_vi === name);
+  let b = a ? Number(a.so_du_dau) || 0 : 0;
+  live().forEach((t) => {
+    if (t.ngay > d) return;
+    if (t.loai === L.CHUYEN) { if (t.vi === name) b -= t.so_tien; if (t.vi_den === name) b += t.so_tien; return; }
+    if (t.vi === name) b += (DAU[t.loai] || 0) * t.so_tien;
+  });
+  return b;
+}
 export const personNames = () => debts().map((d) => d.ten);

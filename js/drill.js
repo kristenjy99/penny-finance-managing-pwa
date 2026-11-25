@@ -5,6 +5,7 @@ import * as st from './store.js';
 import { S, L } from './store.js';
 import { dayCards, flowOf } from './list.js';
 import { lineSvg, walletStats } from './chart.js';
+import * as TK from './tk.js';
 import { pctRound, walletIcon, cardLine } from './screens.js';
 
 // Trạng thái: DV = chi tiết danh mục, WV = chi tiết ví
@@ -67,6 +68,23 @@ export function dmHtml(pc) {
   return `<div class="dmgrid"><div class="dml">${hero}${rows}${chart}</div><div class="dmr2" id="dmlist">${ds}</div></div>`;
 }
 
+// ---------- Chi tiết sổ tiết kiệm (v0.9.0) ----------
+function tkBox(w) {
+  const i = TK.info(w);
+  const dong = (k, v, c = '') => `<div class="tkr"><span>${k}</span><b class="${c}">${v}</b></div>`;
+  const nut = i.daTat ? '' : `<div class="btns tkbtn"><button class="btn" data-act="tk-add" data-k="${esc(w.ten_vi)}">Gửi thêm</button><button class="btn" data-act="w-adjust" data-k="${esc(w.ten_vi)}">Điều chỉnh</button><button class="btn pri" data-act="tk-settle" data-k="${esc(w.ten_vi)}">Tất toán</button></div>`;
+  return TK.banner(w.ten_vi) + `<div class="card tkbox"><div class="vs-h"><span>Thông tin sổ</span>${i.daTat ? '<span class="tag">Đã tất toán</span>' : ''}</div>
+    ${dong('Ngày gửi (kỳ hiện tại)', U.dmy(i.gui))}
+    ${dong('Kỳ hạn', TK.kyLabel(i.ky) + (i.ky ? ` · đến hạn ${U.dmy(i.den)}` + (i.daTat ? '' : i.conNgay > 0 ? ` (còn ${i.conNgay} ngày)` : ' (đã đến hạn)') : ''))}
+    ${dong('Lãi suất', TK.fmtR(i.r) + '%/năm' + (i.ky ? ` · rút trước hạn ${TK.fmtR(w.tk_lai_kkh)}%/năm` : ''))}
+    ${i.ky ? dong('Trả lãi', TK.TRA_LAI[i.tra]) + dong('Khi đến hạn', TK.DAO_HAN[w.tk_dao_han || 'goc_lai']) : ''}
+    ${dong('Ví nhận lãi / tiền tất toán', esc(i.vi))}
+    ${i.daTat ? '' : dong('Lãi tạm tính đến hôm nay', '+' + num(i.laiTam) + ' đ', 'num inc')
+      + (i.ky ? dong('Lãi dự kiến cả kỳ', '+' + num(i.laiKy) + ' đ', 'num inc') : '')
+      + dong('Nếu tất toán hôm nay nhận', num(Math.max(0, i.bal) + i.laiRut) + ' đ', 'num')}
+    <div class="hint" style="margin:8px 0 4px">Lãi = số dư × lãi suất × số ngày thực gửi / 365. Lãi tạm tính chỉ để xem, chưa cộng vào số dư cho tới khi ghi nhận.${st.isHidden(w) && !i.daTat ? ' Sổ này không tính vào tổng tài sản.' : ''}</div>${nut}</div>`;
+}
+
 // ---------- Chi tiết ví ----------
 const PERS = [['30', '30 ngày'], ['thang', 'Tháng'], ['nam', 'Năm'], ['all', 'Tất cả']];
 function wRange() {
@@ -88,7 +106,9 @@ export function vdHtml(pc) {
   const seg = `<div class="perbar vper"><div class="seg" role="radiogroup" aria-label="Khoảng thời gian">${PERS.map(([k, t]) => `<button role="radio" class="${WV.per === k ? 'on' : ''}" aria-checked="${WV.per === k}" data-act="vd-per" data-v="${k}">${t}</button>`).join('')}</div><div class="pnav"><b>${r.lb}</b></div></div>`;
   const band = `<div class="band"><div><div class="lb">Tổng thu</div><div class="vl num inc">${thu ? '+' : ''}${num(thu)}</div></div><div><div class="lb">Tổng chi</div><div class="vl num exp">${chi ? MINUS : ''}${num(chi)}</div></div></div>`;
   const head = `<div class="card vdh"><div class="vdh1"><span class="av lg" aria-hidden="true">${walletIcon(w)}</span><span class="mid"><b>${esc(w.ten_vi)}</b><small>${esc(w.nhom || 'Khác')}${st.defaultAccount() === w.ten_vi ? ' · mặc định' : ''}</small></span></div>
-    <div class="vdh2"><span>Số dư hiện tại</span><b class="num ${w.bal < 0 ? 'exp' : ''}">${net(w.bal)} đ</b></div>${w.nhom === st.NHOM_THE ? cardLine(w, false) : ''}</div>`;
+    <div class="vdh2"><span>Số dư hiện tại</span><b class="num ${w.bal < 0 ? 'exp' : ''}">${net(w.bal)} đ</b></div>${w.nhom === st.NHOM_THE ? cardLine(w, false) : ''}
+    ${st.isSaving(w) ? '' : `<div class="vdh3"><button class="btn sm" data-act="w-adjust" data-k="${esc(w.ten_vi)}">Điều chỉnh số dư</button></div>`}</div>`
+    + (st.isSaving(w) ? tkBox(w) : '');
   const ds = dayCards(list, { pc, w: w.ten_vi }) || '<div class="empty">Không có giao dịch trong khoảng này.</div>';
   const stats = walletStats(w.ten_vi, pc);
   if (!pc) return head + seg + band + ds + stats;

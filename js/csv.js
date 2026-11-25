@@ -9,8 +9,8 @@ import { makeXlsx } from './xlsx.js';
 export const COT = ['Ngày', 'Loại', 'Số tiền', 'Ghi chú', 'Danh mục', 'Ví', 'Ví nhận', 'Người', 'Nguồn'];
 const KIEU = ['date', 'text', 'money', 'text', 'text', 'text', 'text', 'text', 'text'];
 const RONG = [12, 10, 14, 32, 20, 18, 18, 16, 8];
-export const NHAN_LOAI = { 'chi': 'Chi', 'thu': 'Thu', 'chuyển': 'Chuyển', 'cho vay': 'Cho vay', 'đi vay': 'Đi vay', 'thu nợ': 'Thu nợ', 'trả nợ': 'Trả nợ' };
-const LOAI_TU = { 'chi': L.CHI, 'thu': L.THU, 'chuyen': L.CHUYEN, 'chuyen khoan': L.CHUYEN, 'cho vay': L.CHO_VAY, 'di vay': L.DI_VAY, 'thu no': L.THU_NO, 'tra no': L.TRA_NO };
+export const NHAN_LOAI = { 'chi': 'Chi', 'thu': 'Thu', 'chuyển': 'Chuyển', 'cho vay': 'Cho vay', 'đi vay': 'Đi vay', 'thu nợ': 'Thu nợ', 'trả nợ': 'Trả nợ', 'điều chỉnh tăng': 'Điều chỉnh tăng', 'điều chỉnh giảm': 'Điều chỉnh giảm' };
+const LOAI_TU = { 'chi': L.CHI, 'thu': L.THU, 'chuyen': L.CHUYEN, 'chuyen khoan': L.CHUYEN, 'cho vay': L.CHO_VAY, 'di vay': L.DI_VAY, 'thu no': L.THU_NO, 'tra no': L.TRA_NO, 'dieu chinh tang': L.DC_TANG, 'dieu chinh giam': L.DC_GIAM };
 
 // Danh sách giao dịch cần xuất, cũ trước mới sau
 export function exportList(scope) {

@@ -16,7 +16,7 @@ export function applySkin() {
 export function setSkin(v) { try { localStorage.setItem(KEY, v === 'cu' ? 'cu' : 'moi'); } catch (e) { /* bỏ qua */ } applySkin(); }
 
 // Phần tử nằm ngoài thẻ (dải số liệu, nút rộng, ghi chú…); .cbrk = điểm ngắt thẻ (ẩn)
-const NGOAI = '.band, .perbar, .pad, .note, .duebar, .filters, .monthnav, .banner, .split, .st-grid, .dgrid, .setwrap, .tbl, .card, .utabs, .ver, .page-b, .gd-tabs, .soon';
+const NGOAI = '.band, .perbar, .pad, .note, .duebar, .filters, .monthnav, .banner, .split, .st-grid, .dgrid, .setwrap, .tbl, .card, .utabs, .ver, .page-b, .gd-tabs, .soon, .dcard, .dmh, .vstat, .wgrid, .yrnav, .dmgrid, .vgrid';
 // Gom các phần tử liền nhau thành thẻ: mỗi .sec (trừ tiêu đề ngày .dh) mở một thẻ mới
 export function cardify(root) {
   if (!root || !isMoi()) return;

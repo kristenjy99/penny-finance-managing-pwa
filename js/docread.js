@@ -1,5 +1,6 @@
 // Penny v0.6.0 – đọc file sao kê trên thiết bị: CSV/TSV, Excel .xlsx, PDF (lớp chữ, trang scan -> OCR), ảnh (OCR)
 // Thư viện trong lib/ chỉ được nạp khi cần (import động). Không gửi file đi đâu.
+import * as U from './util.js';
 import { splitCsv } from './csv.js';
 import { readXlsx } from './xlsxread.js';
 
@@ -170,4 +171,31 @@ export async function readDoc(file, { onProg = () => {}, askPass = null } = {}) 
   const ms = performance.now() - t0;
   await task.destroy();
   return { kind, grid: false, rows, pages: n, ocrPages, msPerPage: Math.round(ocrPages ? msOcr / ocrPages : ms / Math.max(1, doc.numPages)), conf: ocrPages ? conf / ocrPages : undefined };
+}
+
+/**
+ * v0.8.0 – Ngày tham chiếu của file (dùng cho "Hôm nay", "Hôm qua", "Thứ 7", ngày thiếu năm):
+ * ưu tiên ngày ghi trong file (EXIF ảnh chụp, XMP ảnh chụp màn hình, ngày tạo PDF), rồi ngày lưu file trên máy.
+ * -> { iso: 'yyyy-mm-dd', src: 'meta' | 'file' | '' }
+ */
+export async function fileDate(file) {
+  const ok = (y, m, d) => { const iso = `${y}-${m}-${d}`; return +y > 2000 && +m >= 1 && +m <= 12 && +d >= 1 && +d <= 31 && iso <= U.today() ? iso : ''; };
+  try {
+    const n = file.size, dau = await file.slice(0, Math.min(n, 512 * 1024)).arrayBuffer();
+    const cuoi = n > 512 * 1024 ? await file.slice(Math.max(0, n - 128 * 1024)).arrayBuffer() : new ArrayBuffer(0);
+    const txt = (b) => { const u = new Uint8Array(b); let s = ''; for (let i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192)); return s; };
+    const s = txt(dau) + '\n' + txt(cuoi);
+    let m = s.match(/DateTimeOriginal[^0-9]{0,40}(\d{4})[:-](\d{2})[:-](\d{2})/) // XMP exif:DateTimeOriginal
+      || s.match(/(?:CreateDate|DateCreated)(?:>|=")(\d{4})-(\d{2})-(\d{2})/) // XMP (ảnh chụp màn hình iPhone, Android)
+      || s.match(/\/CreationDate\s*\(D:(\d{4})(\d{2})(\d{2})/) // PDF
+      || s.match(/(?<!\d)(\d{4}):(\d{2}):(\d{2}) \d{2}:\d{2}:\d{2}/); // EXIF
+    const iso = m ? ok(m[1], m[2], m[3]) : '';
+    if (iso) return { iso, src: 'meta' };
+  } catch (e) { /* bỏ qua: dùng ngày lưu file */ }
+  if (file.lastModified) {
+    const t = new Date(file.lastModified), p = (x) => String(x).padStart(2, '0');
+    const iso = ok(t.getFullYear(), p(t.getMonth() + 1), p(t.getDate()));
+    if (iso) return { iso, src: 'file' };
+  }
+  return { iso: U.today(), src: '' };
 }

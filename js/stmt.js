@@ -96,7 +96,20 @@ export function dateFind(s, year, short = false) {
   }
   return null;
 }
-const homNay = (d = 0) => { const t = new Date(); t.setDate(t.getDate() - d); return t.getFullYear() + '-' + p2(t.getMonth() + 1) + '-' + p2(t.getDate()); };
+// v0.8.0: "hôm nay" của file = ngày tham chiếu (ngày chụp/tạo file), không phải ngày nhập vào app
+let REF = '', REL = false;
+const refDay = () => { if (REF) { const [y, m, d] = REF.split('-').map(Number); return new Date(y, m - 1, d); } return new Date(); };
+const homNay = (d = 0) => { const t = refDay(); t.setDate(t.getDate() - d); return t.getFullYear() + '-' + p2(t.getMonth() + 1) + '-' + p2(t.getDate()); };
+// Tiêu đề thứ đứng riêng một dòng ("Thứ 7", "Thứ Bảy", "Chủ nhật", "CN") → ngày gần nhất trước ngày tham chiếu có thứ đó
+const THU_SO = { cn: 0, 'chu nhat': 0, 2: 1, hai: 1, 3: 2, ba: 2, 4: 3, tu: 3, 5: 4, nam: 4, 6: 5, sau: 5, 7: 6, bay: 6 };
+function thuFind(b) {
+  const m = b.match(/^(?:thu\s*(2|3|4|5|6|7|hai|ba|tu|nam|sau|bay)|(chu nhat|cn))\s*[,.:]?\s*$/);
+  if (!m) return null;
+  const want = THU_SO[m[1] || m[2]];
+  const t = refDay();
+  for (let i = 1; i <= 7; i++) { const x = new Date(t); x.setDate(t.getDate() - i); if (x.getDay() === want) return homNay(i); }
+  return null;
+}
 
 // ---------- Ghi chú: bỏ mã tham chiếu, che số tài khoản / số thẻ ----------
 const BO_DAU_NGAN = [
@@ -191,7 +204,9 @@ function yearHintOf(rows) {
   const dem = {};
   rows.forEach((r) => r.forEach((c) => { const d = dateFind(c.t); if (d) { const y = d.iso.slice(0, 4); dem[y] = (dem[y] || 0) + 1; } }));
   const y = Object.keys(dem).sort((a, b) => dem[b] - dem[a])[0];
-  return y ? +y : new Date().getFullYear();
+  if (y) return +y;
+  REL = true; // không có năm trong file → dùng năm của ngày tham chiếu
+  return refDay().getFullYear();
 }
 
 // ---------- Bảng có tiêu đề ----------
@@ -276,8 +291,12 @@ function parseLines(rows) {
   const info = lines.map((s) => {
     const b = bd(s);
     let d = dateFind(s, year, true);
-    if (!d && /^(hom nay|today)\b/.test(b)) d = { iso: homNay(0), i: 0, len: 0 };
-    if (!d && /^(hom qua|yesterday)\b/.test(b)) d = { iso: homNay(1), i: 0, len: 0 };
+    if (!d && /^(hom nay|today)\b/.test(b)) { d = { iso: homNay(0), i: 0, len: 0, hdr: true }; REL = true; }
+    if (!d && /^(hom qua|yesterday)\b/.test(b)) { d = { iso: homNay(1), i: 0, len: 0, hdr: true }; REL = true; }
+    if (!d && /^hom kia\b/.test(b)) { d = { iso: homNay(2), i: 0, len: 0, hdr: true }; REL = true; }
+    if (!d) { const iso = thuFind(b); if (iso) { d = { iso, i: 0, len: 0, hdr: true }; REL = true; } }
+    // "Thứ Bảy, 12/09", "Hôm nay 05/10": dòng tiêu đề ngày có kèm thứ → cũng là tiêu đề nhóm
+    if (d && d.len && /^(thu\s*(\d|hai|ba|tu|nam|sau|bay)|chu nhat|cn|hom nay|hom qua)\b/.test(b)) d.hdr = true;
     const am = amtFind(s).filter((x) => !d || x.i + x.len <= d.i || x.i >= d.i + d.len);
     const amt = am.find((x) => x.sign) || am.find((x) => x.cur) || am[am.length - 1] || null;
     let rest = s;
@@ -296,7 +315,8 @@ function parseLines(rows) {
     if (!x.amt.sign && !x.amt.cur) return;
     const prev = info[i - 1], next = info[i + 1];
     let ngay = x.d ? x.d.iso : null;
-    if (!ngay && next && next.d && !next.amt) ngay = next.d.iso;
+    // tiêu đề tương đối (Hôm nay, Thứ 7…) luôn đứng TRÊN nhóm giao dịch của nó nên không lấy cho dòng phía trên
+    if (!ngay && next && next.d && !next.amt && !next.d.hdr) ngay = next.d.iso;
     if (!ngay && prev && prev.d && !prev.amt && prev.chu < 4) ngay = prev.d.iso;
     if (!ngay) ngay = lastDate;
     if (!ngay) return;
@@ -315,7 +335,8 @@ function parseLines(rows) {
  * Phân tích sao kê. rows: mảng dòng (mảng chuỗi hoặc ô {t,x0,x1}); opts.grid = true với CSV/xlsx.
  * -> { items, mode, bank, card, year }
  */
-export function parseStatement(rows, { grid = false, fileName = '' } = {}) {
+export function parseStatement(rows, { grid = false, fileName = '', ref = '' } = {}) {
+  REF = /^\d{4}-\d{2}-\d{2}$/.test(ref) ? ref : ''; REL = false;
   rows = (rows || []).map(toCells).filter((r) => r.some((c) => String(c.t).trim()));
   const text = rows.map((r) => r.map((c) => c.t).join(' ')).join('\n');
   const src = detectSource(text, fileName);
@@ -331,5 +352,5 @@ export function parseStatement(rows, { grid = false, fileName = '' } = {}) {
     if (t.ngay > mai) { const y = +t.ngay.slice(0, 4) - 1; const iso = okDate(y, +t.ngay.slice(5, 7), +t.ngay.slice(8, 10)); if (iso) t.ngay = iso; }
     t.ghi_chu = cleanNote(t.raw) || (src.bank ? 'Giao dịch ' + src.bank : 'Giao dịch sao kê');
   });
-  return { items, mode, bank: src.bank, card: src.card, text };
+  return { items, mode, bank: src.bank, card: src.card, text, ref: homNay(0), rel: REL };
 }

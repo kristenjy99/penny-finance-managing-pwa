@@ -4,7 +4,8 @@ import * as U from './util.js';
 import { esc, num, MINUS } from './util.js';
 import * as st from './store.js';
 import { S, L, NHAN, NO_TYPES } from './store.js';
-import { brandMark } from './ui.js';
+import { brandMark, isPC } from './ui.js';
+import { walletStats, compact } from './chart.js';
 
 // Trạng thái riêng của các màn này
 export const SV = { stTab: 'chi', person: '', per: 'thang', anchor: '', open: '' };
@@ -134,7 +135,7 @@ export function statParts(loai, list) {
   if (arr.length > MAU) {
     const giu = arr.slice(0, MAU - 1).filter((x) => U.boDau(x.k) !== 'khac');
     const con = arr.filter((x) => !giu.includes(x));
-    arr = giu.concat({ k: 'Khác', v: U.sum(con, (x) => x.v), n: U.sum(con, (x) => x.n), cats: con.flatMap((x) => (x.cats.length ? x.cats : [{ k: x.k, v: x.v, n: x.n }])).sort((a, b) => b.v - a.v) });
+    arr = giu.concat({ agg: true, k: 'Khác', v: U.sum(con, (x) => x.v), n: U.sum(con, (x) => x.n), cats: con.flatMap((x) => (x.cats.length ? x.cats : [{ k: x.k, v: x.v, n: x.n }])).sort((a, b) => b.v - a.v) });
   }
   const pct = pctRound(arr.map((x) => x.v));
   const out = arr.map((x, i) => ({ ...x, pct: pct[i], mau: 'var(--c' + (i + 1) + ')' }));
@@ -244,11 +245,11 @@ export function statsHtml(pc) {
   const total = U.sum(parts, (x) => x.v);
   const nhan = loai === L.CHI ? 'Tổng chi' : 'Tổng thu';
   const nGd = U.sum(parts, (x) => x.n);
+  // v0.8.0: bấm một dòng → màn chi tiết cả năm (nhóm: chia theo danh mục con; danh mục: từng tháng + giao dịch)
   const legend = parts.length ? parts.map((p) => {
-    const mo = !parts.byCat && p.cats.length && SV.open === p.k;
-    const sub = mo ? p.cats.map((c) => `<div class="leg-sub"><span class="k">${esc(c.k)}</span><span class="num">${num(c.v)} · ${total ? Math.round(c.v / total * 100) : 0}%<small>${c.n} GD · ${p.v ? Math.round(c.v / p.v * 100) : 0}% nhóm</small></span></div>`).join('') : '';
-    const canMo = !parts.byCat && p.cats.length;
-    return `<${canMo ? 'button' : 'div'} class="leg" ${canMo ? `data-act="st-grp" data-k="${esc(p.k)}" aria-expanded="${!!mo}"` : ''}><i style="background:${p.mau}"></i><span class="k">${esc(p.k)}</span><span class="num">${num(p.v)} · ${p.pct}%</span>${canMo ? `<span class="chev" aria-hidden="true">${mo ? '▾' : '▸'}</span>` : ''}</${canMo ? 'button' : 'div'}>${sub}`;
+    const canMo = !p.agg;
+    const tag = canMo ? 'button' : 'div';
+    return `<${tag} class="leg" ${canMo ? `data-act="st-open" data-kind="${parts.byCat ? 'c' : 'g'}" data-k="${esc(p.k)}"` : ''}><i style="background:${p.mau}"></i><span class="k">${esc(p.k)}</span><span class="num">${num(p.v)} · ${p.pct}%</span>${canMo ? '<span class="chev" aria-hidden="true">›</span>' : ''}</${tag}>`;
   }).join('') : `<div class="empty">Chưa có khoản ${loai === L.CHI ? 'chi' : 'thu'} trong khoảng này.</div>`;
   const head = parts.length ? `<div class="sec dh"><span>${loai === L.CHI ? 'Chi' : 'Thu'} theo ${parts.byCat ? 'danh mục' : 'nhóm'}</span><span class="r num">${num(total)} đ · ${nGd} GD</span></div>` : '';
   const alert = loai === L.CHI && SV.per === 'thang' ? budgetAlert() : '';
@@ -274,7 +275,7 @@ export function cardStatus(info) {
   return { c: 'inc', t: info.noSk ? `Đã trả đủ kỳ sao kê ${U.dm(info.ngaySk)}` : `Kỳ sao kê ${U.dm(info.ngaySk)} không có dư nợ` };
 }
 // Dòng phụ dưới mỗi thẻ: hạn mức, thanh đã dùng, kỳ sao kê, nút Thanh toán
-function cardLine(w, pc) {
+export function cardLine(w, pc) {
   const i = st.cardInfo(w);
   const tt = cardStatus(i);
   if (!i.lim && !tt && !i.no) return '';
@@ -314,25 +315,29 @@ export function walletsHtml(pc) {
   const gs = walletGroups();
   const balC = (v) => (v < 0 ? 'exp' : '');
   if (!pc) {
-    const list = gs.map((g) => `<div class="sec"><span>${esc(g.nhom)}</span><span class="r num">${net(U.sum(g.ws, (w) => w.bal))}</span></div>`
-      + g.ws.map((w) => `<button class="row" data-act="w-edit" data-k="${esc(w.ten_vi)}">
+    // v0.8.0: ví dạng thẻ gọn theo nhóm; bấm thẻ → màn chi tiết ví, nút ✎ → sửa ví
+    const list = gs.map((g) => `<div class="wgrid"><div class="wgh"><span>${esc(g.nhom)}</span><span class="r num">${net(U.sum(g.ws, (w) => w.bal))}</span></div>`
+      + g.ws.map((w) => `<div class="wcard${w.nhom === st.NHOM_THE ? ' wide' : ''}"><button class="wmain" data-act="w-open" data-k="${esc(w.ten_vi)}" title="Tháng ${U.monthLabel(S.month)}: thu ${num(w.thu)} · chi ${num(w.chi)}">
         <span class="av" aria-hidden="true">${walletIcon(w)}</span>
-        <span class="mid"><span class="t1" style="display:block">${esc(w.ten_vi)}${st.defaultAccount() === w.ten_vi ? ' <span class="tag">mặc định</span>' : ''}</span><span class="t2" style="display:block">Thu ${num(w.thu)} · Chi ${num(w.chi)}</span></span>
-        <span class="amt num ${balC(w.bal)}">${net(w.bal)}</span></button>` + (w.nhom === st.NHOM_THE ? cardLine(w, false) : '')).join('')).join('');
-    return bandOf([{ lb: 'Tổng thu', vl: plus(tt.thu), c: 'inc' }, { lb: 'Tổng chi', vl: minus(tt.chi), c: 'exp' }])
-      + groupBand(gs)
-      + (list || '<div class="empty">Chưa có ví nào.</div>')
-      + `<div class="btns pad"><button class="btn" data-act="transfer">Chuyển khoản</button><button class="btn pri" data-act="w-add">+ Thêm ví</button></div>` + netNote(nw);
+        <span class="wn">${esc(w.ten_vi)}${st.defaultAccount() === w.ten_vi ? ' <span class="tag">mặc định</span>' : ''}</span>
+        <b class="wb num ${balC(w.bal)}">${net(w.bal)}</b><small class="wt num">Thu ${compact(w.thu)} · Chi ${compact(w.chi)}</small></button>
+        <button class="wed" data-act="w-edit" data-k="${esc(w.ten_vi)}" aria-label="Sửa ví ${esc(w.ten_vi)}">✎</button>${w.nhom === st.NHOM_THE ? cardLine(w, false) : ''}</div>`).join('') + '</div>').join('');
+    const btns = `<div class="btns pad"><button class="btn" data-act="transfer">Chuyển khoản</button><button class="btn pri" data-act="w-add">+ Thêm ví</button></div>`;
+    const head = bandOf([{ lb: 'Tổng thu', vl: plus(tt.thu), c: 'inc' }, { lb: 'Tổng chi', vl: minus(tt.chi), c: 'exp' }]) + groupBand(gs);
+    const vis = list || '<div class="empty">Chưa có ví nào.</div>';
+    // PC (mẫu mới): thẻ ví bên trái, thống kê 6 tháng bên phải
+    if (isPC()) return head + `<div class="vgrid"><div class="vgl">${vis}${btns}</div><div class="vgr">${walletStats('', true)}</div></div>` + netNote(nw);
+    return head + vis + btns + walletStats('', false) + netNote(nw);
   }
   const all = gs.flatMap((g) => g.ws);
-  const rows = all.map((w) => `<button class="tr" data-act="w-edit" data-k="${esc(w.ten_vi)}">
+  const rows = all.map((w) => `<button class="tr" data-act="w-open" data-k="${esc(w.ten_vi)}">
       <span class="b wname"><span class="av xs" aria-hidden="true">${walletIcon(w)}</span>${esc(w.ten_vi)}${st.defaultAccount() === w.ten_vi ? ' <span class="tag">mặc định</span>' : ''}</span><span>${esc(w.nhom || 'Khác')}</span>
       <span class="r num">${num(w.thu)}</span><span class="r num">${num(w.chi)}</span><span class="r num b ${balC(w.bal)}">${net(w.bal)}</span></button>` + (w.nhom === st.NHOM_THE ? cardLine(w, true) : '')).join('');
   return bandOf([{ lb: 'Tổng số dư', vl: net(nw.total) + ' đ', c: nw.total < 0 ? 'exp' : '' }, { lb: 'Tài sản', vl: num(nw.assets) }, { lb: 'Nợ', vl: minus(nw.liab), c: 'exp' },
     { lb: 'Tổng thu', vl: plus(tt.thu), c: 'inc' }, { lb: 'Tổng chi', vl: minus(tt.chi), c: 'exp' }])
     + groupBand(gs)
-    + `<div class="tbl wtbl"><div class="th"><span>Ví</span><span>Nhóm</span><span class="r">Thu</span><span class="r">Chi</span><span class="r">Số dư</span></div>${rows}
-      <div class="tr tot"><span>Tổng cộng</span><span></span><span class="r num">${num(U.sum(all, (w) => w.thu))}</span><span class="r num">${num(U.sum(all, (w) => w.chi))}</span><span class="r num ${balC(nw.total)}">${net(nw.total)}</span></div></div>`
+    + `<div class="vgrid"><div class="vgl"><div class="tbl wtbl"><div class="th"><span>Ví</span><span>Nhóm</span><span class="r">Thu</span><span class="r">Chi</span><span class="r">Số dư</span></div>${rows}
+      <div class="tr tot"><span>Tổng cộng</span><span></span><span class="r num">${num(U.sum(all, (w) => w.thu))}</span><span class="r num">${num(U.sum(all, (w) => w.chi))}</span><span class="r num ${balC(nw.total)}">${net(nw.total)}</span></div></div></div><div class="vgr">${walletStats('', true)}</div></div>`
     + netNote(nw);
 }
 

@@ -8,7 +8,7 @@ import { isPC, toast, openSheet } from './ui.js';
 import { pickCategory } from './pick.js';
 import { openWallet } from './manage.js';
 import { parseStatement, NGUON } from './stmt.js';
-import { readDoc, kindOf, KIND_LABEL, endOcr } from './docread.js';
+import { readDoc, kindOf, KIND_LABEL, endOcr, fileDate } from './docread.js';
 
 export const NGUON_SK = 'sao kê';
 const ACCEPT = '.csv,.tsv,.txt,.xlsx,.xls,.pdf,image/*,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -51,7 +51,7 @@ export function markDup(rows) {
 }
 
 export function mountScan(el, { onDone = () => {} } = {}) {
-  const V = { file: null, kind: '', busy: null, err: '', rows: null, bank: '', card: false, vi: '', viHint: '', info: null, lan: 0 };
+  const V = { file: null, kind: '', busy: null, err: '', rows: null, bank: '', card: false, vi: '', viHint: '', info: null, lan: 0, raw: null, ref: '', refSrc: '', rel: false };
   const pc = isPC();
   const nho = new Map(); // ghi chú -> danh mục cần nhớ từ khóa khi lưu
 
@@ -96,12 +96,13 @@ export function mountScan(el, { onDone = () => {} } = {}) {
         askPass: (sai) => askPassword(sai)
       });
       if (lan !== V.lan) return;
-      const p = parseStatement(d.rows, { grid: d.grid, fileName: f.name });
+      // Ngày tham chiếu = ngày chụp / tạo file (không phải ngày nhập vào app)
+      const fd = await fileDate(f);
+      V.raw = { rows: d.rows, grid: d.grid, name: f.name }; V.ref = fd.iso; V.refSrc = fd.src;
+      const p = parse();
       V.info = { pages: d.pages, ocrPages: d.ocrPages || 0, ms: d.msPerPage, mode: p.mode };
       el.dataset.ms = d.msPerPage || '';
       V.bank = p.bank; V.card = p.card;
-      V.rows = p.items.map((t, k) => ({ k, ngay: t.ngay, sign: t.sign, so_tien: t.so_tien, ghi_chu: t.ghi_chu, doan: t.doan,
-        loaiFile: t.loaiFile || '', fileVi: t.vi || '', fileViDen: t.vi_den || '', nguoi: t.nguoi || '', fileCat: t.cat || '', cat: '', tt: '', on: true }));
       const goiY = suggestWallet(p.bank, p.card);
       V.vi = goiY || st.defaultAccount();
       V.viHint = !goiY && p.bank ? `Chưa có ví ${p.bank}${p.card ? ' (thẻ tín dụng)' : ''}: chọn ví khác hoặc ＋ Thêm ví mới…` : '';
@@ -114,6 +115,17 @@ export function mountScan(el, { onDone = () => {} } = {}) {
     V.busy = null;
     draw();
   }
+  // Đọc lại các dòng theo ngày tham chiếu hiện tại
+  function parse() {
+    const p = parseStatement(V.raw.rows, { grid: V.raw.grid, fileName: V.raw.name, ref: V.ref });
+    V.rel = p.rel;
+    V.rows = p.items.map((t, k) => ({ k, ngay: t.ngay, sign: t.sign, so_tien: t.so_tien, ghi_chu: t.ghi_chu, doan: t.doan,
+      loaiFile: t.loaiFile || '', fileVi: t.vi || '', fileViDen: t.vi_den || '', nguoi: t.nguoi || '', fileCat: t.cat || '', cat: '', tt: '', on: true }));
+    return p;
+  }
+  // Dòng chọn ngày tham chiếu: chỉ hiện khi file có ngày tương đối (Hôm nay, Hôm qua, Thứ 7…) hoặc thiếu năm
+  const refHtml = () => (V.rel ? `<div class="sc-ref"><label for="sc-ref">Ngày chụp / tạo file</label><input class="inp" type="date" id="sc-ref" data-ref value="${V.ref}" max="${U.today()}">
+    <small>${V.refSrc === 'meta' ? 'Lấy từ thông tin trong file.' : V.refSrc === 'file' ? 'Lấy từ ngày lưu file trên máy.' : 'Không đọc được ngày của file, đang dùng hôm nay.'} "Hôm nay", "Hôm qua", "Thứ 7"… và ngày thiếu năm được tính theo ngày này; sửa nếu chưa đúng.</small></div>` : '');
   function askPassword(sai) {
     return new Promise((ok) => {
       let v = null;
@@ -178,14 +190,14 @@ export function mountScan(el, { onDone = () => {} } = {}) {
       const tbl = V.rows && V.rows.length ? `<div class="sc-tbl" role="table">
           <div class="sc-tr sc-th" role="row"><span>${V.rows.length ? `<button type="button" class="sc-ck ${n === V.rows.length ? 'on' : ''}" role="checkbox" aria-checked="${n === V.rows.length}" aria-label="Chọn tất cả" data-all>${n === V.rows.length ? '✓' : ''}</button>` : ''}</span><span>Ngày</span><span>Ghi chú</span><span class="r">Số tiền</span><span>Danh mục</span><span>Trạng thái</span></div>
           ${V.rows.map((r) => `<div class="sc-tr ${r.tt === 'chon' && r.on ? 'need' : ''} ${r.on ? '' : 'off'}" role="row" data-row="${r.k}">
-            <span>${ck(r)}</span><button type="button" class="sc-c" data-ed="${r.k}">${U.dm(r.ngay)}</button>
+            <span>${ck(r)}</span><button type="button" class="sc-c" data-ed="${r.k}">${U.dmy(r.ngay)}</button>
             <button type="button" class="sc-c b" data-ed="${r.k}" title="${esc(r.ghi_chu)}">${esc(r.ghi_chu)}</button>
             <button type="button" class="sc-c r" data-ed="${r.k}">${amt(r)}</button>
             <span>${catBtn(r, 'sc-cat inp')}</span><span class="sc-st ${r.tt === 'chon' || r.dup ? 'exp' : ''}">${ttText(r)}</span></div>`).join('')}
         </div>` : '';
       el.innerHTML = `<div class="sc pc">
         <label class="sc-drop" data-drop><span class="sc-dt"><b>Kéo thả ảnh, PDF hoặc CSV sao kê vào đây</b><small>JPG, PNG, PDF, CSV, Excel · đọc ngoại tuyến trên thiết bị${ten}</small></span><span class="btn sm">${V.file ? 'Đổi file' : 'Chọn file'}</span>${fileInput}</label>
-        ${progHtml()}${errHtml()}${V.rows && V.rows.length ? hintHtml() : ''}${tbl}
+        ${progHtml()}${errHtml()}${V.rows && V.rows.length ? refHtml() + hintHtml() : ''}${tbl}
         <div class="sc-foot">${V.rows && V.rows.length ? `<span class="lbl">Lưu vào ví</span>${walletSel('inp sc-vi')}` : ''}<span class="sp"></span>
           <button type="button" class="btn" data-cancel>Hủy</button><button type="button" class="btn pri" data-save ${n && !V.busy ? '' : 'disabled'}>Lưu ${n}<br>giao dịch</button></div>
       </div>`;
@@ -194,10 +206,10 @@ export function mountScan(el, { onDone = () => {} } = {}) {
     const dau = V.file ? `<div class="sc-file"><span class="sc-ic">${nhan}</span><div class="sc-fn"><b>${esc(V.file.name)}</b><small>${tomTat()}</small></div>
         <label class="btn sm">Đổi file${fileInput}</label></div>`
       : `<label class="sc-drop" data-drop><span class="sc-dt"><b>Chọn ảnh, PDF, CSV hoặc Excel sao kê</b><small>Ảnh chụp màn hình app ngân hàng / ví, PDF hoặc file Excel tải từ ngân hàng · đọc ngoại tuyến trên thiết bị, không gửi file đi đâu</small></span><span class="btn sm">Chọn file</span>${fileInput}</label>`;
-    const list = V.rows && V.rows.length ? `<div class="sc-vrow"><span class="lbl">Lưu vào ví</span>${walletSel('sc-sel')}</div>${hintHtml()}
+    const list = V.rows && V.rows.length ? `<div class="sc-vrow"><span class="lbl">Lưu vào ví</span>${walletSel('sc-sel')}</div>${refHtml()}${hintHtml()}
       <div class="sc-list">${V.rows.map((r) => `<div class="sc-r ${r.on ? '' : 'off'}" data-row="${r.k}">${ck(r)}
         <div class="sc-m"><button type="button" class="sc-t" data-ed="${r.k}"><span class="sc-n">${esc(r.ghi_chu)}</span>${amt(r)}</button>
-          <div class="sc-d">${U.dm(r.ngay)}${r.dup ? ' <span class="tag">Có thể trùng</span>' : ''}${r.loai === L.CHUYEN ? ' <span class="tag">Thanh toán thẻ</span>' : ''}</div>
+          <div class="sc-d">${U.dmy(r.ngay)}${r.dup ? ' <span class="tag">Có thể trùng</span>' : ''}${r.loai === L.CHUYEN ? ' <span class="tag">Thanh toán thẻ</span>' : ''}</div>
           ${catBtn(r, 'sc-cat' + (r.tt === 'chon' ? ' need' : ''))}</div></div>`).join('')}</div>
       <p class="sc-note">Khoản khớp từ khóa được phân loại tự động. Bạn có thể đổi danh mục của bất kỳ khoản nào trước khi lưu.${V.rows.some((r) => r.dup) ? ' Khoản "Có thể trùng" đã có trong Penny nên được bỏ chọn sẵn.' : ''}</p>
       <div class="sc-foot btns"><button type="button" class="btn" data-all>${n === V.rows.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}</button><button type="button" class="btn pri" data-save ${n && !V.busy ? '' : 'disabled'}>Lưu ${n} giao dịch</button></div>` : '';
@@ -262,6 +274,10 @@ export function mountScan(el, { onDone = () => {} } = {}) {
   // ---------- Sự kiện ----------
   el.addEventListener('change', (e) => {
     if (e.target.matches('[data-file]')) { const f = e.target.files && e.target.files[0]; e.target.value = ''; load(f); return; }
+    if (e.target.matches('[data-ref]')) {
+      if (!e.target.value || e.target.value > U.today()) { e.target.value = V.ref; return; }
+      V.ref = e.target.value; V.refSrc = 'tay'; parse(); applyAll(); draw(); return;
+    }
     if (e.target.matches('[data-vi]')) {
       if (e.target.value === '__new__') { e.target.value = V.vi; openWallet('', (moi) => { V.vi = moi; V.viHint = ''; applyAll(); draw(); }); return; }
       V.vi = e.target.value; V.viHint = ''; applyAll(); draw();

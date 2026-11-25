@@ -655,7 +655,8 @@ html[data-skin="moi"] body { background: var(--bg); font-weight: 500; font-size:
 [data-skin="moi"] .top h1 { font-size: 28px; font-weight: 700; letter-spacing: -.3px; padding-top: 0; }
 [data-skin="moi"] .content { position: relative; z-index: 2; margin-top: -22px; padding-left: 16px; padding-right: 16px; }
 [data-skin="moi"] .top.has-tabs { padding-bottom: 0; }
-[data-skin="moi"] .top.has-tabs + .content { margin-top: 12px; }
+/* Thanh tab nổi thò xuống 22px dưới header → nội dung phải cách 22 + 12px (v0.7.1 sửa lỗi đè) */
+[data-skin="moi"] .top.has-tabs + .content { margin-top: 34px; }
 [data-skin="moi"] .top .utabs { position: relative; z-index: 3; margin: 0 16px -22px; padding: 4px; height: 44px; background: var(--card); border: 1px solid var(--bd); border-radius: 14px; gap: 2px; }
 [data-skin="moi"] .top .utabs button { height: 34px; border: 0; border-radius: 10px; font-size: 13.5px; font-weight: 600; color: var(--ink2); }
 [data-skin="moi"] .top .utabs button.on { color: var(--ink); font-weight: 700; background: none; }

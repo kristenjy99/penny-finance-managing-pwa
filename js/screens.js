@@ -317,7 +317,7 @@ export function statsHtml(pc) {
   const bars = barsSvg(buckets(loai, r), tenBars);
   const moi = isMoi();
   const hinh = kieu === 'moi' && parts.length ? `<div class="pie-wrap">${pieSvg(parts, nhan, total, pc ? 460 : 390)}</div>` : `<div class="donut-wrap">${donutSvg(parts, nhan, total)}</div>`;
-  const left = `<div class="chartbar">${chartSwitch()}</div>${hinh}${head}${legend}${moi ? '' : alert}`;
+  const left = `<div class="chartbar">${chartSwitch()}<button class="btn cmbtn" data-act="set-chartmau" aria-label="Đổi màu biểu đồ" title="Đổi màu biểu đồ"><span class="cm-dots" aria-hidden="true">${PIE.slice(0, 3).map((c) => `<i style="background:${c}"></i>`).join('')}</span>Màu</button></div>${hinh}${head}${legend}${moi ? '' : alert}`;
   const s0 = st.totals(list);
   const cl = s0.thu - s0.chi;
   const band = bandOf([{ lb: 'Thu', vl: plus(s0.thu), c: 'inc' }, { lb: 'Chi', vl: minus(s0.chi), c: 'exp' }, { lb: 'Chênh lệch', vl: netSigned(cl), c: cl > 0 ? 'inc' : cl < 0 ? 'exp' : '' }]);

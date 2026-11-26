@@ -254,20 +254,18 @@ function openChartColors(ctx) {
   const ve = () => Object.entries(CC.BO_MAU).map(([k, x]) => {
     const ds = CC.chartColors(k), on = CC.chartMau() === k;
     return `<button class="opt cmau${on ? ' on' : ''}" role="radio" aria-checked="${on}" data-cm="${k}"><span class="optl" style="flex-direction:column;align-items:flex-start;gap:6px">
-      <span><b>${esc(x.ten)}</b>${k === 'theme' ? ' <span class="tag">khuyên dùng</span>' : ''}<span class="sub">${esc(x.mo)}</span></span>
+      <span><b>${esc(x.ten)}</b>${k === 'theme' ? ' <span class="tag">mặc định</span>' : ''}<span class="sub">${esc(x.mo)}</span></span>
       <span class="cm-strip" aria-hidden="true">${ds.map((c) => `<i style="background:${c}"></i>`).join('')}</span></span><span aria-hidden="true">${on ? '✓' : ''}</span></button>`;
   }).join('');
   openSheet({
     title: 'Màu biểu đồ', cls: 'mid',
-    body: `<div class="hint" style="margin:0 0 10px">Áp cho biểu đồ tròn, vành khuyên, cột và đường số dư. Số thu / chi luôn giữ màu thu / chi của theme. "Theo theme" tự đổi khi bạn đổi màu giao diện hoặc sáng / tối. Lưu trên máy này.</div><div role="radiogroup" aria-label="Bộ màu biểu đồ" data-cms>${ve()}</div>`,
+    body: `<div class="hint" style="margin:0 0 10px">Áp cho biểu đồ tròn, vành khuyên, cột và đường số dư. Màu số thu / chi không đổi. Lưu trên máy này.</div>
+      <div role="radiogroup" aria-label="Bộ màu biểu đồ" data-cms>${ve()}</div>
+      <label class="cm-goc"><input type="color" data-goc value="${CC.chartGoc()}"><span>Màu gốc cho bộ “Tự chọn màu gốc”</span></label>`,
     onMount: (b) => {
-      b.addEventListener('click', (e) => {
-        const x = e.target.closest('[data-cm]');
-        if (!x) return;
-        CC.setChartMau(x.dataset.cm);
-        b.querySelector('[data-cms]').innerHTML = ve();
-        if (ctx && ctx.render) ctx.render();
-      });
+      const ap = (k, goc) => { CC.setChartMau(k, goc); b.querySelector('[data-cms]').innerHTML = ve(); if (ctx && ctx.render) ctx.render(); };
+      b.addEventListener('click', (e) => { const x = e.target.closest('[data-cm]'); if (x) ap(x.dataset.cm); });
+      b.querySelector('[data-goc]').addEventListener('input', (e) => ap('tu', e.target.value)); // kéo màu là xem ngay
     }
   });
 }

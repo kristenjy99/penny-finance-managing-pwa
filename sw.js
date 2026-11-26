@@ -1,6 +1,6 @@
 // Service worker của Penny: cache khung app để mở được khi mất mạng.
 // MỖI LẦN PHÁT HÀNH: đổi VERSION để máy người dùng tải bản mới.
-const VERSION = 'penny-v0.10.1';
+const VERSION = 'penny-v0.10.2';
 const LIB_CACHE = 'penny-lib'; // thư viện đọc ảnh/PDF (lib/): cache khi dùng lần đầu, giữ qua các phiên bản
 const FONT_CACHE = 'penny-fonts';
 const SHELL = [

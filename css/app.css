@@ -1053,3 +1053,15 @@ html[data-skin="moi"] body { background: var(--bg); font-weight: 500; font-size:
 .cm-strip { display: flex; gap: 3px; }
 .cm-strip i { width: 22px; height: 14px; border-radius: 3px; display: block; }
 .opt.cmau.on { background: var(--bg2); }
+
+/* v0.10.2 – nút Màu cạnh nút đổi kiểu biểu đồ + ô màu gốc */
+.chartbar { gap: 8px; align-items: center; flex-wrap: nowrap; }
+.chartbar .chartsw { flex: none; flex-wrap: nowrap; margin: 0; }
+.chartbar .chartsw button { padding: 0 10px; white-space: nowrap; flex: none; }
+.cmbtn { white-space: nowrap; flex: none; }
+.cmbtn { width: auto; min-height: 44px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; }
+.cm-dots { display: inline-flex; }
+.cm-dots i { width: 10px; height: 10px; border-radius: 50%; display: block; margin-left: -3px; border: 1px solid var(--card, var(--bg)); }
+.cm-dots i:first-child { margin-left: 0; }
+.cm-goc { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 10px; font-size: 14px; color: var(--ink2); }
+.cm-goc input { width: 44px; height: 44px; padding: 0; border: 1px solid var(--bd, var(--line)); border-radius: 8px; background: none; }

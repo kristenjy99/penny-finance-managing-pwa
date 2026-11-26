@@ -1,14 +1,16 @@
-// Penny v0.10.1 – màu biểu đồ: tự phối theo màu theme (mặc định) hoặc chọn bộ màu có sẵn; lưu theo máy (localStorage penny_chart_mau)
+// Penny v0.10.2 – màu biểu đồ: tự phối theo màu theme (mặc định) hoặc chọn bộ màu có sẵn; lưu theo máy (localStorage penny_chart_mau)
 // Áp cho: biểu đồ tròn, vành khuyên (--c1..--c10), cột (--bar), đường số dư (--c1). Màu thu / chi giữ đúng màu theme để không lẫn nghĩa.
 
 export const BO_MAU = {
-  theme: { ten: 'Theo theme (tự phối)', mo: 'Suy ra từ màu theme đang dùng, sáng / tối tự đổi theo' },
-  don: { ten: 'Đơn sắc theo theme', mo: 'Các sắc độ đậm nhạt của màu theme' },
+  theme: { ten: 'Theo theme', mo: 'Lấy đúng 2 màu chính của theme (màu nút và màu số thu) rồi pha thêm các sắc độ sáng cùng họ; đổi theme hoặc sáng / tối là tự đổi theo' },
+  don: { ten: 'Đơn sắc theo theme', mo: 'Một màu chính của theme, đậm nhạt khác nhau' },
+  tu: { ten: 'Tự chọn màu gốc', mo: 'Chọn 1 màu bạn thích, app tự pha 10 màu hài hòa từ màu đó' },
   ruc: { ten: 'Rực rỡ', mo: 'Như hình mẫu biểu đồ tròn', ds: ['#F26B5B', '#F7963E', '#F8C447', '#E9DC3F', '#B6DC48', '#6ACC6A', '#58D6C6', '#6FB2EA', '#9A8DEB', '#D98AD6'] },
-  pastel: { ten: 'Pastel', mo: 'Màu nhạt, dịu mắt', ds: ['#F4A6BE', '#B6A3E6', '#F2CC8F', '#8FC9E8', '#A8D8B9', '#F7B58B', '#C3B1E1', '#9ED9D3', '#E8C1D9', '#D5E39A'] },
-  tram: { ten: 'Trầm', mo: 'Màu đậm, hợp giao diện tối', ds: ['#B5525C', '#C07A3E', '#B79A3B', '#6E9A4E', '#3F8C82', '#4D78A8', '#6A5BA8', '#9A5794', '#7C6C99', '#8A7B70'] }
+  pastel: { ten: 'Pastel', mo: 'Màu nhạt, dịu mắt', ds: ['#F4A6BE', '#B6A3E6', '#F2CC8F', '#8FC9E8', '#A8D8B9', '#F7B58B', '#C3B1E1', '#9ED9D3', '#E8C1D9', '#D5E39A'] }
 };
 export const chartMau = () => { try { const v = localStorage.getItem('penny_chart_mau'); return BO_MAU[v] ? v : 'theme'; } catch (e) { return 'theme'; } };
+/** Màu gốc của bộ "Tự chọn màu gốc" (localStorage penny_chart_goc) */
+export const chartGoc = () => { try { const v = localStorage.getItem('penny_chart_goc'); return /^#[0-9a-f]{6}$/i.test(v || '') ? v : '#E0709A'; } catch (e) { return '#E0709A'; } };
 
 // ---- chuyển đổi màu ----
 function hexToHsl(h) {
@@ -45,23 +47,38 @@ export function luma(hex) {
 }
 export const chuTren = (hex) => (luma(hex) > 0.36 ? '#2A2230' : '#FFFFFF');
 
+const kep = (x, a, b) => Math.max(a, Math.min(b, x));
+const lechSac = (a, b) => { const d = Math.abs(((a - b) % 360 + 360) % 360); return Math.min(d, 360 - d); };
+
+// Pha 10 màu từ màu chính A và màu phụ B: xen kẽ 2 họ màu, độ sáng cao (không trầm), lát cạnh nhau khác độ sáng để dễ phân biệt
+function phaMau(A, B, dark) {
+  let hA = A[0], hB = B ? B[0] : hA + 45;
+  if (!B || B[1] < 0.15 || lechSac(hA, hB) < 25) hB = hA + 45; // màu phụ trùng / xám → lấy màu kề bên
+  const SA = kep(A[1], 0.5, 0.78), SB = kep(B && B[1] >= 0.15 ? B[1] : SA, 0.42, 0.7), Sm = (SA + SB) / 2;
+  // màu giữa: 2 màu gần nhau → nằm giữa; xa nhau (vd cam + xanh dương) → màu kề màu chính để không ra màu lạ
+  const d = ((hB - hA) % 360 + 540) % 360 - 180;
+  const xa = Math.abs(d) > 110, hM = xa ? hA + 20 : hA + d / 2;
+  const dL = dark ? -0.03 : 0;
+  const ds = [[hA, SA, 0.64], [hB, SB, 0.68], [hA + 14, SA * 0.9, 0.77], [hM, Sm, 0.71], [hB - 14, SB * 0.9, 0.8],
+    [hA - 12, SA * 0.85, 0.82], [hB + 16, SB, 0.58], [xa ? hA - 22 : hM + 18, Sm * 0.85, 0.8], [hA, SA * 0.85, 0.56], [hB, SB * 0.7, 0.84]];
+  return ds.map(([h, sat, l]) => hslToHex(h, sat, l + dL));
+}
+
 /** 10 màu biểu đồ theo lựa chọn hiện tại và màu theme đang áp dụng */
 export function chartColors(kieu = chartMau()) {
   if (BO_MAU[kieu] && BO_MAU[kieu].ds) return BO_MAU[kieu].ds.slice();
-  const css = getComputedStyle(document.documentElement);
   const dark = document.documentElement.dataset.theme === 'dark';
-  const goc = toHex(css.getPropertyValue('--pri')) || toHex(css.getPropertyValue('--acc')) || '#C5B3D3';
-  const hs = hexToHsl(goc) || [280, 0.4, 0.6];
-  // màu theme quá nhạt / xám (vd header pastel): tăng độ bão hòa để biểu đồ rõ
-  const S = Math.max(0.45, Math.min(0.72, hs[1] < 0.2 ? 0.45 : hs[1]));
+  if (kieu === 'tu') return phaMau(hexToHsl(chartGoc()) || [340, 0.65, 0.66], null, dark);
+  const css = getComputedStyle(document.documentElement);
+  // màu chính: màu nút (mẫu mới --pri) hoặc header (mẫu cũ --acc); màu phụ: màu số thu (--inc) của theme
+  let A = hexToHsl(toHex(css.getPropertyValue('--pri')) || toHex(css.getPropertyValue('--acc'))) || [330, 0.6, 0.65];
+  let B = hexToHsl(toHex(css.getPropertyValue('--inc')));
+  if (A[1] < 0.15 && B && B[1] >= 0.15) { A = B; B = null; } // theme xám: lấy màu số thu làm màu chính
   if (kieu === 'don') {
-    // cùng sắc độ, sáng dần (tối: ngược lại)
-    return Array.from({ length: 10 }, (_, i) => hslToHex(hs[0] + (i % 2 ? 8 : 0), S * (1 - i * 0.04), dark ? 0.72 - i * 0.045 : 0.46 + i * 0.042));
+    const S = kep(A[1], 0.45, 0.72), Ls = [0.6, 0.76, 0.67, 0.82, 0.55, 0.72, 0.85, 0.63, 0.79, 0.88];
+    return Ls.map((l, i) => hslToHex(A[0] + (i % 2 ? 6 : 0), S * (l > 0.8 ? 0.85 : 1), l - (dark ? 0.03 : 0)));
   }
-  // Theo theme: bắt đầu từ màu theme, xoay sắc độ theo bước 36° xen kẽ hai phía để màu cạnh nhau tách biệt nhưng cùng tông
-  const L = dark ? 0.66 : 0.6;
-  const buoc = [0, 36, -36, 72, -72, 108, -108, 144, -144, 180];
-  return buoc.map((d, i) => hslToHex(hs[0] + d, S * (i % 2 ? 0.92 : 1), L + (i % 3 === 2 ? -0.06 : i % 3 === 1 ? 0.04 : 0)));
+  return phaMau(A, B, dark);
 }
 
 /** Ghi biến CSS cho biểu đồ (gọi sau khi áp màu theme / đổi sáng tối / đổi bộ màu) */
@@ -71,7 +88,10 @@ export function applyChartColors() {
   if (!st) { st = document.createElement('style'); st.id = 'chart-css'; document.head.appendChild(st); }
   st.textContent = `html{${ds.map((c, i) => `--c${i + 1}:${c} !important;`).join('')}--bar:${ds[0]} !important;}`; // !important: thắng biến --cN của từng mẫu / theme
 }
-export function setChartMau(v) {
-  try { localStorage.setItem('penny_chart_mau', BO_MAU[v] ? v : 'theme'); } catch (e) { /* bỏ qua */ }
+export function setChartMau(v, goc) {
+  try {
+    localStorage.setItem('penny_chart_mau', BO_MAU[v] ? v : 'theme');
+    if (goc && /^#[0-9a-f]{6}$/i.test(goc)) localStorage.setItem('penny_chart_goc', goc);
+  } catch (e) { /* bỏ qua */ }
   applyChartColors();
 }

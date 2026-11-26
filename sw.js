@@ -1,13 +1,13 @@
 // Service worker của Penny: cache khung app để mở được khi mất mạng.
 // MỖI LẦN PHÁT HÀNH: đổi VERSION để máy người dùng tải bản mới.
-const VERSION = 'penny-v0.9.0';
+const VERSION = 'penny-v0.10.0';
 const LIB_CACHE = 'penny-lib'; // thư viện đọc ảnh/PDF (lib/): cache khi dùng lần đầu, giữ qua các phiên bản
 const FONT_CACHE = 'penny-fonts';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/util.js', 'js/db.js', 'js/store.js', 'js/sync.js', 'js/ui.js', 'js/form.js',
   'js/screens.js', 'js/manage.js', 'js/csv.js', 'js/xlsx.js', 'js/pick.js',
-  'js/scan.js', 'js/stmt.js', 'js/docread.js', 'js/xlsxread.js', 'js/unzip.js', 'js/wipe.js', 'js/skin.js', 'js/list.js', 'js/chart.js', 'js/drill.js', 'js/tk.js', 'js/tkui.js',
+  'js/scan.js', 'js/stmt.js', 'js/docread.js', 'js/xlsxread.js', 'js/unzip.js', 'js/wipe.js', 'js/skin.js', 'js/list.js', 'js/chart.js', 'js/drill.js', 'js/tk.js', 'js/tkui.js', 'js/combo.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'
 ];
 

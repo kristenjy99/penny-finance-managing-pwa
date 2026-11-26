@@ -172,6 +172,53 @@ export function donutSvg(parts, label, total) {
     <div class="dc"><span>${esc(label)}</span><b class="num ${fs}">${t}</b></div></div>`;
 }
 
+// ---------- v0.10.0: biểu đồ tròn kiểu mới (nhãn bên ngoài + %), chọn kiểu lưu theo máy ----------
+export const PIE = ['#F26B5B', '#F7963E', '#F8C447', '#E9DC3F', '#B6DC48', '#6ACC6A', '#58D6C6', '#6FB2EA', '#9A8DEB', '#D98AD6'];
+const PIE_KHAC = '#B4A9AE';
+export const chartKieu = () => { try { return localStorage.getItem('penny_chart') === 'cu' ? 'cu' : 'moi'; } catch (e) { return 'moi'; } };
+export const setChartKieu = (v) => { try { localStorage.setItem('penny_chart', v === 'cu' ? 'cu' : 'moi'); } catch (e) { /* bỏ qua */ } };
+const pieMau = (p, i) => (p.agg ? PIE_KHAC : PIE[i % PIE.length]);
+const pct1 = (v, t) => (t ? (Math.round(v / t * 1000) / 10).toFixed(1).replace('.', ',') : '0') + ' %';
+/** Biểu đồ tròn đặc, nhãn tên + % đặt bên ngoài có đường dẫn, nhãn hai bên không chồng nhau */
+export function pieSvg(parts, label, total, W = 360) {
+  const H = 250, cx = W / 2, cy = H / 2, R = Math.min(80, W * 0.19);
+  const tot = U.sum(parts, (x) => x.v);
+  if (!tot) return '';
+  let a0 = -Math.PI / 2, h = '';
+  const nhan = [];
+  parts.forEach((p, i) => {
+    const f = p.v / tot, a1 = a0 + f * 2 * Math.PI, mau = pieMau(p, i);
+    if (f >= 0.9999) h += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${mau}"/>`;
+    else if (f > 0) {
+      const x0 = cx + R * Math.cos(a0), y0 = cy + R * Math.sin(a0), x1 = cx + R * Math.cos(a1), y1 = cy + R * Math.sin(a1);
+      h += `<path d="M${cx},${cy} L${x0.toFixed(2)},${y0.toFixed(2)} A${R},${R} 0 ${f > 0.5 ? 1 : 0} 1 ${x1.toFixed(2)},${y1.toFixed(2)} Z" fill="${mau}" stroke="var(--pie-gap)" stroke-width="1.2"><title>${esc(p.k)}: ${num(p.v)} đ (${pct1(p.v, tot)})</title></path>`;
+    }
+    const am = (a0 + a1) / 2;
+    if (f > 0) nhan.push({ k: p.k, f, mau, am, phai: Math.cos(am) >= 0, y: cy + (R + 14) * Math.sin(am) });
+    a0 = a1;
+  });
+  // Dàn nhãn mỗi bên: cách nhau tối thiểu 27px, không vượt khung
+  const GAP = 27, TOP = 14, BOT = H - 16;
+  [true, false].forEach((phai) => {
+    const ds = nhan.filter((n) => n.phai === phai).sort((a, b) => a.y - b.y);
+    ds.forEach((n, i) => { n.ly = Math.max(n.y, i ? ds[i - 1].ly + GAP : TOP); });
+    for (let i = ds.length - 1; i >= 0; i--) { const tran = i === ds.length - 1 ? BOT : ds[i + 1].ly - GAP; if (ds[i].ly > tran) ds[i].ly = tran; }
+  });
+  // cắt tên cho vừa khoảng trống từ nhãn tới mép khung (~6,6px mỗi ký tự)
+  const toiDa = Math.max(6, Math.floor((cx - R - 32) / 6.6));
+  const cat = (t) => (t.length > toiDa ? t.slice(0, toiDa - 1) + '…' : t);
+  const lbl = nhan.map((n) => {
+    const ex = cx + R * Math.cos(n.am), ey = cy + R * Math.sin(n.am);
+    const mx = cx + (R + 12) * Math.cos(n.am), my = cy + (R + 12) * Math.sin(n.am);
+    const lx = cx + (n.phai ? 1 : -1) * (R + 26);
+    const tx = lx + (n.phai ? 4 : -4), anc = n.phai ? 'start' : 'end';
+    return `<polyline points="${ex.toFixed(1)},${ey.toFixed(1)} ${mx.toFixed(1)},${my.toFixed(1)} ${lx.toFixed(1)},${n.ly.toFixed(1)}" fill="none" stroke="${n.mau}" stroke-width="1.1"/>
+      <text x="${tx.toFixed(1)}" y="${(n.ly - 2).toFixed(1)}" text-anchor="${anc}" class="pl">${esc(cat(n.k))}</text><text x="${tx.toFixed(1)}" y="${(n.ly + 11).toFixed(1)}" text-anchor="${anc}" class="pp">${pct1(n.f, 1)}</text>`;
+  }).join('');
+  return `<svg class="pie" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)} ${num(total)} đ">${h}${lbl}</svg>`;
+}
+export const chartSwitch = () => `<div class="seg chartsw" role="radiogroup" aria-label="Kiểu biểu đồ">${[['moi', 'Biểu đồ tròn'], ['cu', 'Vành khuyên']].map(([k, t]) => `<button role="radio" class="${chartKieu() === k ? 'on' : ''}" aria-checked="${chartKieu() === k}" data-act="st-chart" data-v="${k}">${t}</button>`).join('')}</div>`;
+
 // Các cột của biểu đồ theo khoảng: tuần/tháng -> từng ngày, quý -> từng tuần, năm -> từng tháng (không vẽ tương lai)
 export function buckets(loai, r) {
   const td = U.today();
@@ -248,22 +295,32 @@ export function statsHtml(pc) {
   const nhan = loai === L.CHI ? 'Tổng chi' : 'Tổng thu';
   const nGd = U.sum(parts, (x) => x.n);
   // v0.8.0: bấm một dòng → màn chi tiết cả năm (nhóm: chia theo danh mục con; danh mục: từng tháng + giao dịch)
-  const legend = parts.length ? parts.map((p) => {
+  const kieu = chartKieu();
+  const legend = parts.length ? parts.map((p, i) => {
     const canMo = !p.agg;
     const tag = canMo ? 'button' : 'div';
-    return `<${tag} class="leg" ${canMo ? `data-act="st-open" data-kind="${parts.byCat ? 'c' : 'g'}" data-k="${esc(p.k)}"` : ''}><i style="background:${p.mau}"></i><span class="k">${esc(p.k)}</span><span class="num">${num(p.v)} · ${p.pct}%</span>${canMo ? '<span class="chev" aria-hidden="true">›</span>' : ''}</${tag}>`;
+    const mo = canMo ? `data-act="st-open" data-kind="${parts.byCat ? 'c' : 'g'}" data-k="${esc(p.k)}"` : '';
+    const chev = canMo ? '<span class="chev" aria-hidden="true">›</span>' : '';
+    // v0.10.0 kiểu mới: ô % màu + tên + số tiền (theo hình mẫu)
+    if (kieu === 'moi') return `<${tag} class="leg leg2" ${mo}><span class="pb" style="background:${pieMau(p, i)}">${p.pct}%</span><span class="k">${esc(p.k)}</span><span class="num">${num(p.v)}</span>${chev}</${tag}>`;
+    return `<${tag} class="leg" ${mo}><i style="background:${p.mau}"></i><span class="k">${esc(p.k)}</span><span class="num">${num(p.v)} · ${p.pct}%</span>${chev}</${tag}>`;
   }).join('') : `<div class="empty">Chưa có khoản ${loai === L.CHI ? 'chi' : 'thu'} trong khoảng này.</div>`;
   const head = parts.length ? `<div class="sec dh"><span>${loai === L.CHI ? 'Chi' : 'Thu'} theo ${parts.byCat ? 'danh mục' : 'nhóm'}</span><span class="r num">${num(total)} đ · ${nGd} GD</span></div>` : '';
   const alert = loai === L.CHI && SV.per === 'thang' ? budgetAlert() : '';
   const tenBars = (loai === L.CHI ? 'Chi' : 'Thu') + ' theo ' + (SV.per === 'quy' ? 'tuần' : SV.per === 'nam' ? 'tháng' : 'ngày');
   const bars = barsSvg(buckets(loai, r), tenBars);
   const moi = isMoi();
-  const left = `<div class="donut-wrap">${donutSvg(parts, nhan, total)}</div>${head}${legend}${moi ? '' : alert}`;
+  const hinh = kieu === 'moi' && parts.length ? `<div class="pie-wrap">${pieSvg(parts, nhan, total, pc ? 460 : 390)}</div>` : `<div class="donut-wrap">${donutSvg(parts, nhan, total)}</div>`;
+  const left = `<div class="chartbar">${chartSwitch()}</div>${hinh}${head}${legend}${moi ? '' : alert}`;
   const s0 = st.totals(list);
-  const band = bandOf([{ lb: 'Thu', vl: plus(s0.thu), c: 'inc' }, { lb: 'Chi', vl: minus(s0.chi), c: 'exp' }, { lb: 'Tổng', vl: net(s0.thu - s0.chi) }]);
-  if (!pc) return perBar() + band + left + `<div class="sec st"><span>${tenBars} <small class="unit">nghìn đ</small></span></div><div class="mbars">${bars}</div>${moi ? alert : ''}`;
+  const cl = s0.thu - s0.chi;
+  const band = bandOf([{ lb: 'Thu', vl: plus(s0.thu), c: 'inc' }, { lb: 'Chi', vl: minus(s0.chi), c: 'exp' }, { lb: 'Chênh lệch', vl: netSigned(cl), c: cl > 0 ? 'inc' : cl < 0 ? 'exp' : '' }]);
+  // v0.10.0: chênh lệch thu − chi (dòng tiền ròng) của kỳ, màu theo dấu
+  const cf = `<div class="netcf ${cl > 0 ? 'duong' : cl < 0 ? 'am' : ''}"><div class="cf1"><span>Chênh lệch thu − chi</span><b class="num ${cl > 0 ? 'inc' : cl < 0 ? 'exp' : ''}">${netSigned(cl)} đ</b></div>
+    <div class="cf2">Thu <b class="num inc">${plus(s0.thu)}</b> − Chi <b class="num exp">${minus(s0.chi)}</b> · ${cl > 0 ? 'dòng tiền dương: thu nhiều hơn chi' : cl < 0 ? 'dòng tiền âm: chi nhiều hơn thu' : 'thu bằng chi'}${s0.thu ? ` · chi bằng ${Math.round(s0.chi / s0.thu * 100)}% thu` : ''}</div></div>`;
+  if (!pc) return perBar() + band + cf + left + `<div class="sec st"><span>${tenBars} <small class="unit">nghìn đ</small></span></div><div class="mbars">${bars}</div>${moi ? alert : ''}`;
   const tabs = `<div class="utabs st-tabs" role="tablist">${[['chi', 'Chi tiêu'], ['thu', 'Thu nhập']].map(([k, t]) => `<button role="tab" class="${SV.stTab === k ? 'on' : ''}" aria-selected="${SV.stTab === k}" data-act="st-tab" data-v="${k}">${t}</button>`).join('')}</div>`;
-  return band + perBar() + `<div class="st-grid"><div class="st-l">${tabs}${left}</div>
+  return band + perBar() + cf + `<div class="st-grid"><div class="st-l">${tabs}${left}</div>
     <div class="st-r"><h2>${tenBars} <small>nghìn đ</small></h2>${bars}${moi ? alert : ''}</div></div>`;
 }
 export const statsTabs = () => `<div class="utabs" role="tablist">${[['chi', 'Chi tiêu'], ['thu', 'Thu nhập']].map(([k, t]) => `<button role="tab" class="${SV.stTab === k ? 'on' : ''}" aria-selected="${SV.stTab === k}" data-act="st-tab" data-v="${k}">${t}</button>`).join('')}</div>`;

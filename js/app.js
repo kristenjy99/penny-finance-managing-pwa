@@ -43,7 +43,7 @@ function parseHash() {
   if (r === 'gd' && p[1]) sub = SUBS.some((s) => s[0] === p[1]) ? p[1] : 'ngay';
   if (r === 'sua') id = decodeURIComponent(p[1] || '');
   // v0.8.0: chi tiết danh mục #/dm/<chi|thu>/<g|c>/<tên>, chi tiết ví #/vd/<tên ví>
-  if (r === 'dm' && !D.openDm(p, SC.perRange().from.slice(0, 4))) r = 'thongke';
+  if (r === 'dm') { const pr = SC.perRange(), td = U.today(); if (!D.openDm(p, SC.SV.per, td >= pr.from && td <= pr.to ? td : pr.from)) r = 'thongke'; }
   if (r === 'vd') { D.WV.name = decodeURIComponent(p[1] || ''); if (!D.findWallet(D.WV.name)) r = 'vi'; }
   if (!CHI_TIET[r]) V.inApp = false;
   if (!NAV.some((n) => n.r === r) && r !== 'sua' && !CHI_TIET[r]) r = 'gd';
@@ -277,7 +277,7 @@ function renderTop() {
   } else if (V.route === 'lich') { title = 'Lịch'; right = monthPill(S.month) + addBtn; }
   else if (V.route === 'sua') { title = 'Sửa giao dịch'; back = `<button class="back" data-act="back" aria-label="Quay lại">‹</button>`; }
   else if (V.route === 'caidat') { title = 'Cài đặt'; right = pc && !moi ? '' : piggy; }
-  else if (V.route === 'dm') { title = esc(D.DV.name); back = `<button class="back" data-act="back" aria-label="Quay lại">‹</button>`; right = D.yearNav(); }
+  else if (V.route === 'dm') { title = esc(D.DV.name); back = `<button class="back" data-act="back" aria-label="Quay lại">‹</button>`; right = ''; }
   else if (V.route === 'vd') { title = esc(D.WV.name); back = `<button class="back" data-act="back" aria-label="Quay lại">‹</button>`; right = `<button class="tbtn" data-act="w-edit" data-k="${esc(D.WV.name)}">Sửa ví</button>`; }
   else {
     title = TITLE[V.route];
@@ -299,6 +299,7 @@ function renderContent() {
   const c = $('#content');
   c.classList.toggle('cgrid', pc && moi && ['vi', 'ngansach', 'caidat'].includes(V.route));
   c.dataset.route = V.route;
+  c.dataset.sub = V.route === 'gd' ? V.sub : ''; // v0.10.0: CSS riêng cho tab con (Lịch mobile rộng hơn)
   const key = [V.route, V.sub, pc ? 'pc' : 'm', moi ? 'moi' : 'cu', V.route === 'sua' && !pc ? V.id : '', V.route === 'dm' ? D.DV.loai + D.DV.kind + D.DV.name : V.route === 'vd' ? D.WV.name : ''].join('|');
   const fresh = key !== layoutKey;
   // Giữ ô đang gõ (ô tìm kiếm) khi vẽ lại
@@ -586,9 +587,10 @@ async function onAct(b, e) {
       if (CHI_TIET[V.route]) { if (V.inApp && history.length > 1) history.back(); else go('#/' + CHI_TIET[V.route]); }
       else leaveEdit();
       break;
-    case 'st-open': V.inApp = true; D.DV.year = SC.perRange().from.slice(0, 4); D.DV.sel = ''; go(D.dmHash(SC.SV.stTab === 'thu' ? 'thu' : 'chi', b.dataset.kind, b.dataset.k)); break;
+    case 'st-open': V.inApp = true; { const pr = SC.perRange(), td = U.today(); D.DV.per = SC.SV.per; D.DV.anchor = td >= pr.from && td <= pr.to ? td : pr.from; } D.DV.sel = ''; go(D.dmHash(SC.SV.stTab === 'thu' ? 'thu' : 'chi', b.dataset.kind, b.dataset.k)); break;
     case 'dm-sel': D.DV.sel = b.dataset.k; render(); break;
-    case 'dm-y': D.DV.year = String(+D.DV.year + +b.dataset.d); D.DV.sel = ''; render(); break;
+    case 'dm-y': D.dmShift(+b.dataset.d); render(); break;
+    case 'dm-per': D.dmPer(b.dataset.v); render(); break;
     case 'w-open': V.inApp = true; D.WV.per = st.isSaving(st.S.acc.find((x) => x.ten_vi === b.dataset.k)) ? 'all' : '30'; go('#/vd/' + encodeURIComponent(b.dataset.k)); break;
     case 'vd-per': D.WV.per = b.dataset.v; render(); break;
     case 'day': {

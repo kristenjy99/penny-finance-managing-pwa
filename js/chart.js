@@ -37,7 +37,7 @@ export function lineSvg(pts, o = {}) {
   const cw = (W - L - R) / pts.length, x = (i) => L + cw * (i + 0.5);
   const xy = pts.map((p, i) => (p.v == null ? null : [x(i).toFixed(1), s.y(p.v).toFixed(1)]));
   const line = xy.filter(Boolean).map((a) => a.join(',')).join(' ');
-  const buoc = pts.length > 8 && W < 500 ? 2 : 1;
+  const buoc = Math.max(1, Math.ceil(pts.length / (W < 500 ? 7 : 12))); // nhãn trục thưa dần khi nhiều mốc (31 ngày)
   return `<svg class="lchart ${o.cls || 'acc'}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.nhan || '')}">${axis(s, W, L, R)}
     ${line ? `<polyline points="${line}" class="ln"/>` : ''}
     ${xy.map((a, i) => (a ? `<circle cx="${a[0]}" cy="${a[1]}" r="3.6" class="dt"><title>${esc(pts[i].t || pts[i].lb)}: ${(pts[i].v < 0 ? MINUS : '') + num(pts[i].v)} đ</title></circle>` : '')).join('')}

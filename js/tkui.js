@@ -28,7 +28,7 @@ export function tkFields(w) {
     <div class="grid2"><div class="fld"><label for="tk-dh">Khi đến hạn</label><select class="inp" id="tk-dh" name="tk_dh">${Object.entries(TK.DAO_HAN).map(([k, t]) => `<option value="${k}" ${(a.tk_dao_han || 'goc_lai') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
       <div class="fld"><label for="tk-vn">Ví nhận lãi / tiền tất toán</label><select class="inp" id="tk-vn" name="tk_vn">${optVi(vis, nhan)}</select></div></div>
     <div class="hint" data-tkprev></div>
-    <label class="set flat"><span>Không tính vào tổng tài sản</span><span class="switch"><input type="checkbox" name="tk_an" ${a.tk_an === '1' ? 'checked' : ''} aria-label="Không tính sổ này vào tổng tài sản"><i></i></span></label>
+    <label class="set flat"><span>Tính vào tổng tài sản hiện có<small style="display:block;color:var(--ink2);font-weight:500">Bật: số dư sổ cộng vào tổng tài sản / tổng số dư ở màn hình chính. Tắt: sổ chỉ hiện riêng ở mục Tiết kiệm.</small></span><span class="switch"><input type="checkbox" name="tk_tinh" ${a.tk_an === '1' ? '' : 'checked'} aria-label="Tính sổ này vào tổng tài sản hiện có"><i></i></span></label>
   </div>`;
 }
 /** Gắn sự kiện cho phần sổ; trả hàm đọc giá trị (null + báo lỗi nếu sai) */
@@ -58,7 +58,7 @@ export function tkMount(b, w) {
     if (r == null) { loi(b, 'Lãi suất chưa đúng. Ví dụ: 5,5'); return null; }
     if (kkh == null) { loi(b, 'Lãi khi rút trước hạn chưa đúng. Ví dụ: 0,1'); return null; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(g('tk_ngay'))) { loi(b, 'Chọn ngày gửi.'); return null; }
-    const out = { tk_ngay_gui: g('tk_ngay'), tk_ky_han: +g('tk_ky'), tk_lai_suat: r, tk_lai_kkh: kkh, tk_tra_lai: tra, tk_dao_han: g('tk_dh'), tk_vi_nhan: g('tk_vn'), tk_an: g('tk_an') ? '1' : '' };
+    const out = { tk_ngay_gui: g('tk_ngay'), tk_ky_han: +g('tk_ky'), tk_lai_suat: r, tk_lai_kkh: kkh, tk_tra_lai: tra, tk_dao_han: g('tk_dh'), tk_vi_nhan: g('tk_vn'), tk_an: g('tk_tinh') ? '' : '1' };
     if (w) Object.assign(out, { tk_trang_thai: w.tk_trang_thai || '', tk_da_tra: w.tk_da_tra || '' });
     if (!w) {
       const goc = U.parseMoney(g('tk_goc'));

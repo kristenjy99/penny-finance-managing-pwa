@@ -17,20 +17,8 @@ const STOP = new Set(['thanh', 'toan', 'chuyen', 'tien', 'khoan', 'giao', 'dich'
 const tu = (s) => U.boDau(s).split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !STOP.has(w));
 const giong = (a, b) => { const x = tu(a); return tu(b).some((w) => x.includes(w)); };
 const accOf = (ten) => S.acc.find((a) => a.ten_vi === ten);
-// v0.9.0: ví khác được nhắc tới trong ghi chú (nạp / rút / gửi tiết kiệm giữa các ví của mình) → gợi ý chuyển khoản
-export function walletInNote(note, tru) {
-  const n = ' ' + U.boDau(note).replace(/[^a-z0-9]+/g, ' ') + ' ';
-  const gon = n.replace(/ /g, '');
-  const ds = st.walletNames().filter((x) => x !== tru);
-  for (const ten of ds) {
-    const a = accOf(ten) || {};
-    const k = U.boDau(ten).replace(/[^a-z0-9]+/g, '');
-    if (k.length >= 4 && !/^(tienmat|cash|vidientu|nganhang)$/.test(k) && gon.includes(k)) return ten;
-    const tat = String(a.viet_tat || '').split(/\s*,\s*/).map((x) => U.boDau(x).trim()).filter((x) => x.length >= 3);
-    if (tat.some((x) => n.includes(' ' + x + ' '))) return ten;
-  }
-  return '';
-}
+// v0.10.0: walletInNote chuyển sang store.js (dùng chung với form chuyển khoản)
+const walletInNote = st.walletInNote;
 
 /** Ví đề xuất theo ngân hàng nhận ra từ file (sao kê thẻ ưu tiên ví nhóm Thẻ tín dụng) */
 export function suggestWallet(bank, card) {

@@ -5,9 +5,10 @@ import { esc, num } from './util.js';
 import * as st from './store.js';
 import { S, L } from './store.js';
 import { openSheet, confirmBox, toast, pickOne, ask } from './ui.js';
-import { SV, budStatus, cardStatus, perSet, perShift, walletIcon, MAU_SAN, snoozeCard } from './screens.js';
+import { SV, budStatus, cardStatus, perSet, perShift, walletIcon, MAU_SAN, snoozeCard, setChartKieu } from './screens.js';
 import { zipStore } from './xlsx.js';
 import * as TKU from './tkui.js';
+import { comboHtml, comboMount } from './combo.js';
 import { openCsv } from './csv.js';
 
 const same = (a, b) => U.boDau(a) === U.boDau(b);
@@ -491,7 +492,7 @@ export function openCategory(key, loai = 'chi') {
       <div class="fld"><label for="c-ten">Tên danh mục</label><input class="inp" id="c-ten" name="ten" value="${esc(c ? c.danh_muc : '')}" autocomplete="off" ${c ? '' : 'autofocus'} ${goc ? 'readonly' : ''}>
         ${goc ? '<div class="hint">Danh mục mặc định của bot, không đổi tên hay xóa được.</div>' : c ? '<div class="hint">Đổi tên sẽ đổi luôn danh mục trong các giao dịch và từ khóa.</div>' : ''}</div>
       <div class="fld"><span class="lbl">Loại</span><div class="seg" role="radiogroup">${[['chi', 'Chi'], ['thu', 'Thu']].map(([k, t]) => `<button type="button" role="radio" data-lo="${k}" class="${lo === k ? 'on' : ''}" aria-checked="${lo === k}">${t}</button>`).join('')}</div></div>
-      <div class="grid2"><div class="fld"><label for="c-nh">Nhóm</label><input class="inp" id="c-nh" name="nh" list="c-dl" value="${esc(c ? c.nhom : (groupsFor(lo)[0] || ''))}" autocomplete="off"><datalist id="c-dl">${groupsFor(lo).map((g) => `<option value="${esc(g)}">`).join('')}</datalist></div>
+      <div class="grid2"><div data-cbw>${comboHtml({ name: 'nh', value: c ? c.nhom : (groupsFor(lo)[0] || ''), options: groupsFor(lo), label: 'Nhóm (danh mục cha)', newLabel: 'Nhóm mới' })}</div>
         <div class="fld"><label for="c-kh">Ký tự đại diện</label><input class="inp" id="c-kh" name="kh" value="${esc(c ? c.ky_hieu : '')}" maxlength="4" placeholder="${esc(c ? U.chuCai(c.danh_muc) : 'A')}" autocomplete="off"></div></div>
       <div class="hint" style="margin:-4px 0 10px">Ký tự đại diện: 1 chữ cái hoặc emoji, hiện ở ô vuông đầu mỗi giao dịch. Để trống thì dùng chữ cái đầu tên.</div>
       ${c ? `<div class="hint" style="margin-bottom:10px">Từ khóa: ${kws.length ? kws.map(esc).join(', ') : 'chưa có'} (sửa ở Cài đặt → Từ khóa tự phân loại).</div>` : ''}
@@ -500,12 +501,16 @@ export function openCategory(key, loai = 'chi') {
       ${c && !goc ? '<button type="button" class="btn danger del" data-del>Xóa danh mục</button>' : ''}
     </form>`,
     onMount: (b, close) => {
+      comboMount(b);
       b.addEventListener('click', async (e) => {
         const l = e.target.closest('[data-lo]');
         if (l) {
           lo = l.dataset.lo;
           b.querySelectorAll('[data-lo]').forEach((x) => { x.classList.toggle('on', x === l); x.setAttribute('aria-checked', x === l); });
-          b.querySelector('#c-dl').innerHTML = groupsFor(lo).map((g) => `<option value="${esc(g)}">`).join('');
+          // đổi loại → đổi danh sách nhóm của ô chọn
+          const cur = b.querySelector('[name=nh]').value;
+          b.querySelector('[data-cbw]').innerHTML = comboHtml({ name: 'nh', value: groupsFor(lo).includes(cur) ? cur : (groupsFor(lo)[0] || ''), options: groupsFor(lo), label: 'Nhóm (danh mục cha)', newLabel: 'Nhóm mới' });
+          comboMount(b);
           return;
         }
         if (e.target.closest('[data-del]')) {
@@ -632,6 +637,7 @@ export async function manageAct(a, b, ctx) {
       return true;
     }
     case 'st-tab': SV.stTab = b.dataset.v; SV.open = ''; ctx.render(); return true;
+    case 'st-chart': setChartKieu(b.dataset.v); ctx.render(); return true; // v0.10.0: đổi kiểu biểu đồ (lưu theo máy)
     case 'st-per': perSet(b.dataset.v); SV.open = ''; ctx.render(); return true;
     case 'st-prev': perShift(-1); ctx.render(); return true;
     case 'st-next': perShift(1); ctx.render(); return true;

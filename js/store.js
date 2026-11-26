@@ -619,3 +619,39 @@ export function balanceAt(name, d) {
   return b;
 }
 export const personNames = () => debts().map((d) => d.ten);
+
+// v0.9.0: ví khác được nhắc tới trong ghi chú (nạp / rút / gửi tiết kiệm giữa các ví của mình) → gợi ý chuyển khoản
+export function walletInNote(note, tru) {
+  const n = ' ' + boDau(note).replace(/[^a-z0-9]+/g, ' ') + ' ';
+  const gon = n.replace(/ /g, '');
+  const ds = walletNames().filter((x) => x !== tru);
+  for (const ten of ds) {
+    const a = S.acc.find((x) => x.ten_vi === ten) || {};
+    const k = boDau(ten).replace(/[^a-z0-9]+/g, '');
+    if (k.length >= 4 && !/^(tienmat|cash|vidientu|nganhang)$/.test(k) && gon.includes(k)) return ten;
+    const tat = String(a.viet_tat || '').split(/\s*,\s*/).map((x) => boDau(x).trim()).filter((x) => x.length >= 3);
+    if (tat.some((x) => n.includes(' ' + x + ' '))) return ten;
+  }
+  return '';
+}
+
+/**
+ * v0.10.0: gợi ý ví cho chuyển khoản từ ghi chú.
+ * 1) lần chuyển trước có ghi chú giống (bỏ dấu, chứa nhau, ≥3 ký tự) → dùng lại Từ ví / Đến ví (+ số tiền);
+ * 2) ghi chú nhắc tên ví: có "rút / nhận / từ" đứng trước → ví đó là Từ ví, còn lại là Đến ví.
+ * -> {vi, vi_den, so_tien, vi_do: 'lich_su' | 'ten_vi'} hoặc null
+ */
+export function suggestTransfer(note, viHienTai = '') {
+  const q = boDau(note).replace(/\s+/g, ' ').trim();
+  if (q.length < 3) return null;
+  const ds = walletNames();
+  const cu = live().filter((t) => t.loai === L.CHUYEN && t.ghi_chu && ds.includes(t.vi) && ds.includes(t.vi_den))
+    .filter((t) => { const g = boDau(t.ghi_chu).replace(/\s+/g, ' ').trim(); return g === q || (q.length >= 4 && (g.includes(q) || q.includes(g) && g.length >= 4)); })
+    .sort((a, b) => (a.ngay < b.ngay ? 1 : a.ngay > b.ngay ? -1 : 0));
+  if (cu.length) return { vi: cu[0].vi, vi_den: cu[0].vi_den, so_tien: cu[0].so_tien, vi_do: 'lich_su' };
+  const ten = walletInNote(note, '');
+  if (!ten) return null;
+  const truoc = boDau(note).split(boDau(ten).split(' ')[0])[0];
+  if (/(rut|nhan|tu|ve tu)\s*(tien)?\s*(vi)?\s*$/.test(truoc.trim())) return { vi: ten, vi_den: viHienTai && viHienTai !== ten ? viHienTai : (walletNames().find((x) => x !== ten) || ''), vi_do: 'ten_vi' };
+  return { vi: viHienTai && viHienTai !== ten ? viHienTai : (walletNames().find((x) => x !== ten) || ''), vi_den: ten, vi_do: 'ten_vi' };
+}

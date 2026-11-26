@@ -998,3 +998,53 @@ html[data-skin="moi"] body { background: var(--bg); font-weight: 500; font-size:
 [data-skin="moi"] .tkr:last-of-type { border-bottom: 0; }
 [data-skin="moi"] .vdh3 { padding: 0 10px 10px; }
 [data-skin="moi"] .tkdone { background: var(--card); border: 1px solid var(--bd); border-radius: 18px; margin-bottom: 14px; overflow: hidden; }
+
+/* ================= v0.10.0 ================= */
+/* Lịch trên điện thoại: bớt lề hai bên để ô ngày rộng hơn */
+@media (max-width: 899px) {
+  [data-skin="moi"] .content[data-sub="lich"] { padding-left: 6px; padding-right: 6px; }
+  [data-skin="moi"] .content[data-sub="lich"] .card:has(> .cal) { padding-left: 0; padding-right: 0; border-radius: 14px; }
+  .content[data-sub="lich"] .cal .d { padding: 3px 0 4px; }
+  .content[data-sub="lich"] .cal .d .v { font-size: 10.5px; letter-spacing: -.2px; }
+}
+/* Ô chọn có tìm kiếm (combobox) */
+.combo { position: relative; }
+.combo .inp { padding-right: 40px; }
+.combo .cb-ar { position: absolute; right: 6px; bottom: 0; width: 34px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--ink2); cursor: pointer; }
+.cb-list { position: absolute; left: 0; right: 0; top: 100%; z-index: 30; max-height: 240px; overflow: auto; margin-top: 4px; background: var(--bg); border: 1px solid var(--bd); border-radius: 8px; }
+.cb-o { min-height: 44px; display: flex; align-items: center; padding: 0 14px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 15px; }
+.cb-o:last-child { border-bottom: 0; }
+.cb-o.act, .cb-o:hover { background: var(--bg2); }
+.cb-o[aria-selected="true"] { font-weight: 700; }
+.cb-new { color: var(--inc); font-weight: 700; }
+.cb-none { padding: 12px 14px; color: var(--ink2); font-size: 14px; }
+/* Bộ chọn danh mục: nhóm dạng xổ */
+.acc-g { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 20px; border: 0; border-bottom: 1px solid var(--line); background: var(--line); color: var(--ink); font-weight: 800; font-size: 15px; text-align: left; }
+.acc-g.open { background: var(--bg2); }
+.acc-n { color: var(--ink2); font-weight: 600; font-size: 13px; white-space: nowrap; }
+.acc-b .opt { padding-left: 28px; }
+[data-skin="moi"] .acc-g { background: var(--card); border-bottom: 1px solid var(--line); font-weight: 600; }
+[data-skin="moi"] .acc-g.open { background: var(--bg2); }
+/* Thống kê: chênh lệch thu − chi */
+.netcf { padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.netcf .cf1 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-weight: 700; }
+.netcf .cf1 b { font: 700 20px/1.2 "Baloo 2", sans-serif; }
+.netcf .cf2 { font-size: 12.5px; color: var(--ink2); margin-top: 2px; }
+.netcf.duong { box-shadow: inset 4px 0 0 var(--inc); }
+.netcf.am { box-shadow: inset 4px 0 0 var(--exp); }
+[data-skin="moi"] .netcf { background: var(--card); border: 1px solid var(--bd); border-radius: 18px; padding: 12px 16px; margin-bottom: 14px; }
+[data-skin="moi"] .netcf .cf1 b { font-family: "Be Vietnam Pro", sans-serif; font-size: 19px; }
+/* Biểu đồ tròn kiểu mới + nút đổi kiểu */
+.chartbar { display: flex; justify-content: center; padding: 10px 20px 0; }
+.chartsw { width: auto; }
+.chartsw button { padding: 0 14px; }
+.pie-wrap { padding: 6px 0 2px; --pie-gap: var(--bg); }
+[data-skin="moi"] .pie-wrap { --pie-gap: var(--card); }
+.pie { display: block; width: 100%; max-width: 480px; height: auto; margin: 0 auto; }
+.pie .pl { font: 600 12px "Nunito", sans-serif; fill: var(--ink); }
+.pie .pp { font: 500 11px "Nunito", sans-serif; fill: var(--ink2); }
+[data-skin="moi"] .pie .pl, [data-skin="moi"] .pie .pp { font-family: "Be Vietnam Pro", sans-serif; }
+.leg2 .pb { flex: none; min-width: 44px; height: 26px; padding: 0 6px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #2A2230; }
+.leg2 { min-height: 48px; height: auto; }
+.leg2 .k { flex: 1; }
+.dmper { padding-bottom: 0; }

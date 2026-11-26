@@ -41,6 +41,8 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
     if (init.ghi_chu) f.note = init.ghi_chu;
   }
   let nhoKw = false; // ghi nhớ từ khóa "ghi chú -> danh mục" khi lưu
+  let viTay = !!tx || !!(init && (init.vi || init.vi_den)); // v0.10.0: người dùng đã tự chọn ví → không tự đổi theo ghi chú
+  let goiYCk = null; // gợi ý ví chuyển khoản đang áp dụng
   if (!f.vi_den) f.vi_den = vis.find((v) => v !== f.vi) || '';
   let err = '';
   let noCuoi = NO_TYPES.includes(f.loai) ? f.loai : L.CHO_VAY; // loại công nợ chọn gần nhất
@@ -105,6 +107,7 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
     else if (f.loai === L.CHUYEN) vung = fTien + fGhiChu + `<div class="grid2">${fVi}${fViDen}</div>` + fNgay;
     else vung = fTien + fGhiChu + fDanhMuc + fNguoi + `<div class="grid2">${fVi}${fNgay}</div>`;
     vung += `<div class="hint cardhint" data-cardhint>${cardHint()}</div>`;
+    if (f.loai === L.CHUYEN) vung += `<div class="hint ckhint" data-ckhint>${ckHint()}</div>`;
 
     const luu = `<button class="btn pri" type="submit">Lưu</button>`;
     const huy = `<button class="btn" type="button" data-cancel>Hủy</button>`;
@@ -116,6 +119,27 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
       ${pc && !tx ? '<div class="tip">Mẹo: gõ 20k/cafe/Cà phê/tm trên Telegram (số tiền/ghi chú/danh mục/ví), giao dịch tự xuất hiện ở đây.</div>' : ''}
       ${tx && tx.nguon === 'bot' ? '<div class="tip">Giao dịch này được ghi từ bot Telegram.</div>' : ''}
     </form>`;
+  }
+
+  // v0.10.0: gợi ý Từ ví / Đến ví (và số tiền) theo ghi chú cho tab Chuyển khoản
+  function ckHint() {
+    if (!goiYCk) return viTay ? '' : 'Gõ ghi chú (ví dụ “nạp Momo”, “gửi tiết kiệm”): Penny tự chọn ví theo lần chuyển trước hoặc tên ví trong ghi chú.';
+    return `Tự chọn ví theo ${goiYCk.vi_do === 'lich_su' ? 'lần chuyển trước có ghi chú giống' : 'tên ví trong ghi chú'}: <b>${esc(goiYCk.vi)} → ${esc(goiYCk.vi_den)}</b>. Đổi ô ví nếu chưa đúng.`;
+  }
+  function apGoiYCk() {
+    if (f.loai !== L.CHUYEN || viTay) return;
+    const g = st.suggestTransfer(f.note, f.vi);
+    if (!g || !g.vi || !g.vi_den || g.vi === g.vi_den || !vis.includes(g.vi) || !vis.includes(g.vi_den)) {
+      goiYCk = null; const h0 = el.querySelector('[data-ckhint]'); if (h0) h0.innerHTML = ckHint(); return;
+    }
+    goiYCk = g; f.vi = g.vi; f.vi_den = g.vi_den;
+    const s1 = el.querySelector('[name=vi]'), s2 = el.querySelector('[name=vi_den]');
+    if (s1) s1.value = g.vi;
+    if (s2) s2.value = g.vi_den;
+    const a = el.querySelector('[name=amt]');
+    if (a && !a.value.trim() && g.so_tien) { f.amt = num(g.so_tien) + ' đ'; a.value = f.amt; }
+    const h = el.querySelector('[data-ckhint]'); if (h) h.innerHTML = ckHint();
+    const c = el.querySelector('[data-cardhint]'); if (c) c.innerHTML = cardHint();
   }
 
   // Đọc các ô đang hiện vào f trước khi vẽ lại
@@ -130,6 +154,7 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
     if (!n) return;
     f[n] = e.target.value;
     if (n === 'note' && !f.cat) refreshCat();
+    if (n === 'note') apGoiYCk();
     if (n === 'ngay') { const s = e.target.parentNode.querySelector('.dshow span'); if (s) s.textContent = f.ngay ? dmy(f.ngay) : 'Chọn ngày'; }
     if (n === 'amt' && err === 'amt') { err = ''; }
   });
@@ -144,6 +169,7 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
       return;
     }
     f[e.target.name] = e.target.value;
+    if (e.target.name === 'vi' || e.target.name === 'vi_den') { viTay = true; goiYCk = null; const k = el.querySelector('[data-ckhint]'); if (k) k.innerHTML = ''; }
     if (e.target.name === 'vi' || e.target.name === 'vi_den') { const h = el.querySelector('[data-cardhint]'); if (h) h.innerHTML = cardHint(); }
     if (e.target.name === 'ngay') { const s = e.target.parentNode.querySelector('.dshow span'); if (s) s.textContent = f.ngay ? dmy(f.ngay) : 'Chọn ngày'; }
   });
@@ -170,6 +196,7 @@ export function mountTxForm(el, { tx = null, variant = 'sheet', onDone = () => {
       if (f.loai === L.CHUYEN && (!f.vi_den || f.vi_den === f.vi)) f.vi_den = vis.find((v) => v !== f.vi) || '';
       err = '';
       draw();
+      apGoiYCk();
       return;
     }
     if (b.dataset.pick === 'cat') {

@@ -304,7 +304,7 @@ button.set { cursor: pointer; }
 .lchart .ax, .pbars .ax { font: 600 10.5px "Nunito", sans-serif; fill: var(--ink2); }
 .lchart .ln { fill: none; stroke: var(--lc); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
 .lchart .dt { fill: var(--bg); stroke: var(--lc); stroke-width: 2.2; }
-.lchart.acc { --lc: var(--pri, var(--inc)); } .lchart.exp { --lc: var(--exp); } .lchart.inc { --lc: var(--inc); }
+.lchart.acc { --lc: var(--c1, var(--pri, var(--inc))); } .lchart.exp { --lc: var(--exp); } .lchart.inc { --lc: var(--inc); }
 .pbars .bi, .lgd i.bi { fill: var(--inc); background: var(--inc); }
 .pbars .be, .lgd i.be { fill: var(--exp); background: var(--exp); }
 .lchart .vv, .pbars .vv { font: 700 11px "Nunito", sans-serif; fill: var(--ink); }
@@ -1048,3 +1048,8 @@ html[data-skin="moi"] body { background: var(--bg); font-weight: 500; font-size:
 .leg2 { min-height: 48px; height: auto; }
 .leg2 .k { flex: 1; }
 .dmper { padding-bottom: 0; }
+
+/* Màu biểu đồ: dải màu xem trước */
+.cm-strip { display: flex; gap: 3px; }
+.cm-strip i { width: 22px; height: 14px; border-radius: 3px; display: block; }
+.opt.cmau.on { background: var(--bg2); }

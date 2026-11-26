@@ -9,6 +9,7 @@ import { SV, budStatus, cardStatus, perSet, perShift, walletIcon, MAU_SAN, snooz
 import { zipStore } from './xlsx.js';
 import * as TKU from './tkui.js';
 import { comboHtml, comboMount } from './combo.js';
+import * as CC from './chartcolor.js';
 import { openCsv } from './csv.js';
 
 const same = (a, b) => U.boDau(a) === U.boDau(b);
@@ -243,6 +244,29 @@ function openAppIcon() {
           taiVe(await iconPack(img, st.appName()), 'icon-' + U.boDau(st.appName()).replace(/[^0-9a-z]+/g, '-') + '.zip');
           msg('Đã tải bộ icon. Làm theo HUONG-DAN.txt bên trong file zip.', true);
         }
+      });
+    }
+  });
+}
+
+// v0.10.0: màu biểu đồ – tự phối theo theme hoặc bộ màu có sẵn (lưu theo máy)
+function openChartColors(ctx) {
+  const ve = () => Object.entries(CC.BO_MAU).map(([k, x]) => {
+    const ds = CC.chartColors(k), on = CC.chartMau() === k;
+    return `<button class="opt cmau${on ? ' on' : ''}" role="radio" aria-checked="${on}" data-cm="${k}"><span class="optl" style="flex-direction:column;align-items:flex-start;gap:6px">
+      <span><b>${esc(x.ten)}</b>${k === 'theme' ? ' <span class="tag">khuyên dùng</span>' : ''}<span class="sub">${esc(x.mo)}</span></span>
+      <span class="cm-strip" aria-hidden="true">${ds.map((c) => `<i style="background:${c}"></i>`).join('')}</span></span><span aria-hidden="true">${on ? '✓' : ''}</span></button>`;
+  }).join('');
+  openSheet({
+    title: 'Màu biểu đồ', cls: 'mid',
+    body: `<div class="hint" style="margin:0 0 10px">Áp cho biểu đồ tròn, vành khuyên, cột và đường số dư. Số thu / chi luôn giữ màu thu / chi của theme. "Theo theme" tự đổi khi bạn đổi màu giao diện hoặc sáng / tối. Lưu trên máy này.</div><div role="radiogroup" aria-label="Bộ màu biểu đồ" data-cms>${ve()}</div>`,
+    onMount: (b) => {
+      b.addEventListener('click', (e) => {
+        const x = e.target.closest('[data-cm]');
+        if (!x) return;
+        CC.setChartMau(x.dataset.cm);
+        b.querySelector('[data-cms]').innerHTML = ve();
+        if (ctx && ctx.render) ctx.render();
       });
     }
   });
@@ -620,6 +644,7 @@ export async function manageAct(a, b, ctx) {
     }
     case 'set-appicon': openAppIcon(); return true;
     case 'set-colors': openColors(); return true;
+    case 'set-chartmau': openChartColors(ctx); return true;
     case 'transfer': ctx.openAdd({ loai: L.CHUYEN }); return true;
     case 'b-edit': openBudget(b.dataset.k); return true;
     case 'b-add': openBudgetAdd(); return true;

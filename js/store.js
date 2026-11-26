@@ -1,5 +1,6 @@
 // Dữ liệu trong bộ nhớ + lưu IndexedDB + hàng đợi thay đổi + các phép tính
 import { isMoi, moiColors } from './skin.js';
+import { applyChartColors } from './chartcolor.js';
 import * as db from './db.js';
 import { boDau, nfc, chuanCoDau, chuanKhongDau, nowIso, uid, ym, thisMonth, sum, setNumFormat, today, toDate } from './util.js';
 import { setBrandIcon } from './ui.js';
@@ -129,6 +130,7 @@ function brandCommon(mau) {
     l.href = ok ? icon : href;
     l.type = ok ? 'image/png' : type;
   });
+  applyChartColors(); // v0.10.0: màu biểu đồ phối lại theo màu theme vừa áp
 }
 export function applySettings() {
   setNumFormat(setting('number_format', '1.234.567'));

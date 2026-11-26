@@ -7,6 +7,7 @@ import { S, L, NHAN, NO_TYPES } from './store.js';
 import { brandMark, isPC } from './ui.js';
 import { walletStats, compact } from './chart.js';
 import * as TK from './tk.js';
+import { chartColors, chuTren, BO_MAU, chartMau } from './chartcolor.js';
 
 // Trạng thái riêng của các màn này
 export const SV = { stTab: 'chi', person: '', per: 'thang', anchor: '', open: '' };
@@ -173,14 +174,18 @@ export function donutSvg(parts, label, total) {
 }
 
 // ---------- v0.10.0: biểu đồ tròn kiểu mới (nhãn bên ngoài + %), chọn kiểu lưu theo máy ----------
-export const PIE = ['#F26B5B', '#F7963E', '#F8C447', '#E9DC3F', '#B6DC48', '#6ACC6A', '#58D6C6', '#6FB2EA', '#9A8DEB', '#D98AD6'];
+// Màu lấy theo bộ màu biểu đồ đang chọn (chartcolor.js); "Khác" luôn xám
 const PIE_KHAC = '#B4A9AE';
+let PIE = chartColors();
+export const chartMauTen = () => BO_MAU[chartMau()].ten;
 export const chartKieu = () => { try { return localStorage.getItem('penny_chart') === 'cu' ? 'cu' : 'moi'; } catch (e) { return 'moi'; } };
 export const setChartKieu = (v) => { try { localStorage.setItem('penny_chart', v === 'cu' ? 'cu' : 'moi'); } catch (e) { /* bỏ qua */ } };
 const pieMau = (p, i) => (p.agg ? PIE_KHAC : PIE[i % PIE.length]);
+const pieChu = (p, i) => chuTren(pieMau(p, i)); // chữ đen / trắng tùy độ sáng ô màu
 const pct1 = (v, t) => (t ? (Math.round(v / t * 1000) / 10).toFixed(1).replace('.', ',') : '0') + ' %';
 /** Biểu đồ tròn đặc, nhãn tên + % đặt bên ngoài có đường dẫn, nhãn hai bên không chồng nhau */
 export function pieSvg(parts, label, total, W = 360) {
+  PIE = chartColors();
   const H = 250, cx = W / 2, cy = H / 2, R = Math.min(80, W * 0.19);
   const tot = U.sum(parts, (x) => x.v);
   if (!tot) return '';
@@ -296,13 +301,14 @@ export function statsHtml(pc) {
   const nGd = U.sum(parts, (x) => x.n);
   // v0.8.0: bấm một dòng → màn chi tiết cả năm (nhóm: chia theo danh mục con; danh mục: từng tháng + giao dịch)
   const kieu = chartKieu();
+  PIE = chartColors();
   const legend = parts.length ? parts.map((p, i) => {
     const canMo = !p.agg;
     const tag = canMo ? 'button' : 'div';
     const mo = canMo ? `data-act="st-open" data-kind="${parts.byCat ? 'c' : 'g'}" data-k="${esc(p.k)}"` : '';
     const chev = canMo ? '<span class="chev" aria-hidden="true">›</span>' : '';
     // v0.10.0 kiểu mới: ô % màu + tên + số tiền (theo hình mẫu)
-    if (kieu === 'moi') return `<${tag} class="leg leg2" ${mo}><span class="pb" style="background:${pieMau(p, i)}">${p.pct}%</span><span class="k">${esc(p.k)}</span><span class="num">${num(p.v)}</span>${chev}</${tag}>`;
+    if (kieu === 'moi') return `<${tag} class="leg leg2" ${mo}><span class="pb" style="background:${pieMau(p, i)};color:${pieChu(p, i)}">${p.pct}%</span><span class="k">${esc(p.k)}</span><span class="num">${num(p.v)}</span>${chev}</${tag}>`;
     return `<${tag} class="leg" ${mo}><i style="background:${p.mau}"></i><span class="k">${esc(p.k)}</span><span class="num">${num(p.v)} · ${p.pct}%</span>${chev}</${tag}>`;
   }).join('') : `<div class="empty">Chưa có khoản ${loai === L.CHI ? 'chi' : 'thu'} trong khoảng này.</div>`;
   const head = parts.length ? `<div class="sec dh"><span>${loai === L.CHI ? 'Chi' : 'Thu'} theo ${parts.byCat ? 'danh mục' : 'nhóm'}</span><span class="r num">${num(total)} đ · ${nGd} GD</span></div>` : '';

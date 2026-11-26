@@ -458,6 +458,7 @@ function settingsHtml(pc) {
       ${[['light', 'Sáng', 'sáng'], ['dark', 'Tối', 'tối'], ['auto', 'Tự động', 'tự động']].map(([k, t, v]) => `<button role="radio" aria-checked="${theme === k}" class="${theme === k ? 'on' : ''}" data-act="theme" data-v="${v}">${t}</button>`).join('')}</span></div>
     <div class="set tall"><span>Mẫu thiết kế</span><span class="seg" role="radiogroup" aria-label="Mẫu thiết kế">
       ${[['moi', 'Mới'], ['cu', 'Cũ']].map(([k, t]) => `<button role="radio" aria-checked="${(isMoi() ? 'moi' : 'cu') === k}" class="${(isMoi() ? 'moi' : 'cu') === k ? 'on' : ''}" data-act="skin" data-v="${k}">${t}</button>`).join('')}</span></div>
+    ${go2('set-chartmau', 'Màu biểu đồ', SC.chartMauTen())}
     ${go2('set-numfmt', 'Định dạng số', num(1234567) + ' đ')}
     ${go2('set-week', 'Tuần bắt đầu', ws)}
     <div class="sec" id="s-rieng">Giao diện riêng</div>
